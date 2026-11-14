@@ -9,11 +9,13 @@ export interface SpriteDef {
   file: string;       // Pfad relativ zu assets/
   frames?: number;    // Frames pro Zeile (Standard 1)
   fps?: number;       // Animationsgeschwindigkeit (Standard 8)
-  dirs?: 1 | 4;       // 1 = eine Zeile, 4 = unten/links/rechts/oben
+  dirs?: 1 | 4 | 8;   // 1 = eine Zeile, 4 = unten/links/rechts/oben,
+                      // 8 = S, SO, O, NO, N, NW, W, SW (wie der PixelLab-Export)
   height?: number;    // Anzeigehöhe in Kacheln (Standard 1)
   anchorY?: number;   // wo die Füße sind (0 = oben, 1 = unten; Standard 0.95)
   flip?: boolean;     // bei dirs 1: spiegeln, wenn die Figur nach links schaut
   animIdle?: boolean; // auch im Stand animieren (z. B. Flügelschlag)
+  bob?: boolean;      // beim Laufen leicht wippen (für Figuren ohne Laufanimation)
 }
 
 interface Loaded { def: SpriteDef; img: HTMLImageElement; fw: number; fh: number; white?: HTMLCanvasElement }
@@ -81,10 +83,20 @@ class AssetStore {
     let row = 0, flip = false;
     const dx = o.dirX || 0, dy = o.dirY ?? 1;
     if (d.dirs === 4) row = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 1 : 2) : dy < 0 ? 3 : 0;
+    else if (d.dirs === 8) {
+      const deg = (Math.atan2(dy, dx) * 180) / Math.PI;
+      row = (((Math.round((90 - deg) / 45) % 8) + 8) % 8);
+    }
     else if (d.flip && dx < -0.1) flip = true;
     const h = (d.height || 1) * s * (o.scale || 1);
     const w = h * (l.fw / l.fh);
-    const top = y - h * (d.anchorY ?? 0.95);
+    let top = y - h * (d.anchorY ?? 0.95);
+    let sq = 1;
+    if (d.bob && o.moving) {
+      const ph = (o.t || 0) * 11;
+      top -= Math.abs(Math.sin(ph)) * h * 0.05;
+      sq = 1 + Math.sin(ph * 2) * 0.03;
+    }
     ctx.save();
     // beim Verkleinern glätten (sonst flimmern feine Pixel), beim Vergrößern scharf
     ctx.imageSmoothingEnabled = !this.pixelArt || h < l.fh;
@@ -92,7 +104,7 @@ class AssetStore {
     if (o.alpha !== undefined) ctx.globalAlpha *= o.alpha;
     if (flip) { ctx.translate(x, 0); ctx.scale(-1, 1); ctx.translate(-x, 0); }
     const src = o.flash ? this.whiteOf(l) : l.img;
-    ctx.drawImage(src, frame * l.fw, row * l.fh, l.fw, l.fh, x - w / 2, top, w, h);
+    ctx.drawImage(src, frame * l.fw, row * l.fh, l.fw, l.fh, x - (w * sq) / 2, top + h * (1 - 1 / sq), w * sq, h / sq);
     ctx.restore();
     return true;
   }

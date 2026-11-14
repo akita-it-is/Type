@@ -48,12 +48,13 @@ dieselbe Pixeldichte haben – also alles in diesem Raster:
 |---|---|
 | `file` | Pfad relativ zu `public/assets/` |
 | `frames` | Anzahl Bilder pro Zeile (Animation) |
-| `dirs` | `4` = Zeilen unten/links/rechts/oben, sonst 1 Zeile |
+| `dirs` | `4` = Zeilen unten/links/rechts/oben, `8` = S, SO, O, NO, N, NW, W, SW (PixelLab-Export), sonst 1 Zeile |
 | `fps` | Animationsgeschwindigkeit |
 | `height` | Anzeigehöhe in Kacheln (Spieler ≈ 1) |
 | `anchorY` | wo die Füße sind (0 = oben, 1 = unten, Standard 0.95) |
 | `flip` | bei 1 Zeile: spiegeln, wenn die Figur nach links schaut |
 | `animIdle` | auch im Stand animieren (Flügel, Atmen) |
+| `bob` | beim Laufen leicht wippen (für Figuren ohne Laufanimation) |
 
 ## Alle Namen (Schlüssel)
 

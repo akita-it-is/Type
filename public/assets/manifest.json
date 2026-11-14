@@ -1,1 +1,6 @@
-{ "pixelArt": true, "sprites": {} }
+{
+  "pixelArt": true,
+  "sprites": {
+    "char_wanderer": { "file": "chars/spieler_basic_1.png", "dirs": 8, "height": 1.2, "anchorY": 0.98, "bob": true }
+  }
+}
