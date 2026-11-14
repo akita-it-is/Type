@@ -86,7 +86,9 @@ class AssetStore {
     const w = h * (l.fw / l.fh);
     const top = y - h * (d.anchorY ?? 0.95);
     ctx.save();
-    ctx.imageSmoothingEnabled = !this.pixelArt;
+    // beim Verkleinern glätten (sonst flimmern feine Pixel), beim Vergrößern scharf
+    ctx.imageSmoothingEnabled = !this.pixelArt || h < l.fh;
+    ctx.imageSmoothingQuality = 'high';
     if (o.alpha !== undefined) ctx.globalAlpha *= o.alpha;
     if (flip) { ctx.translate(x, 0); ctx.scale(-1, 1); ctx.translate(-x, 0); }
     const src = o.flash ? this.whiteOf(l) : l.img;
@@ -101,7 +103,8 @@ class AssetStore {
     if (!l) return false;
     const f = Math.min(size / l.fw, size / l.fh);
     ctx.save();
-    ctx.imageSmoothingEnabled = !this.pixelArt;
+    ctx.imageSmoothingEnabled = !this.pixelArt || f < 1;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(l.img, 0, 0, l.fw, l.fh, cx - (l.fw * f) / 2, cy - (l.fh * f) / 2, l.fw * f, l.fh * f);
     ctx.restore();
     return true;
@@ -112,7 +115,7 @@ class AssetStore {
     const l = this.sprites.get(key);
     if (!l) return false;
     const frames = l.def.frames || 1;
-    ctx.imageSmoothingEnabled = !this.pixelArt;
+    ctx.imageSmoothingEnabled = !this.pixelArt || w < l.fw;
     ctx.drawImage(l.img, (variant % frames) * l.fw, 0, l.fw, l.fh, x, y, w + 0.6, h + 0.6);
     return true;
   }

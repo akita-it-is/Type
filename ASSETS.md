@@ -7,17 +7,20 @@ ersetzen: erst den Spieler, dann die Gegner einer Welt, dann den Boden …
 
 ## Stil-Vorgaben (damit alles zusammenpasst)
 
+**Standard: 64 px pro Kachel** (detaillierter Stil). Wichtig ist, dass ALLE Bilder
+dieselbe Pixeldichte haben – also alles in diesem Raster:
+
 | Was | Größe pro Bild/Frame | Hinweise |
 |---|---|---|
-| Kachel (Boden) | **32 × 32 px** | 1 Kachel = 1 Spielfeld. Mehrere Varianten nebeneinander in einer Zeile |
-| Spielfigur | 32 × 32 (oder 48 × 48) | Sheet: 4 Zeilen (unten, links, rechts, oben) × 4–6 Lauf-Frames |
-| Normale Gegner | 32 × 32 | 2–4 Frames, 1 Zeile reicht (`flip: true` spiegelt nach links) |
-| Miniboss | 64 × 64 | |
-| Endboss | 96 × 96 | |
-| Felsen / Hindernis | 32 × 32 (oder 32 × 40) | |
-| Item-Icon | 16 × 16 oder 32 × 32 | |
-| Schuss | 8 × 8 bis 16 × 16 | `shot_player`, `shot_enemy` |
-| Welten-Karte | z. B. 640 × 360 | darf auch „gemalt“ statt Pixel sein |
+| Kachel (Boden) | **64 × 64 px** | 1 Kachel = 1 Spielfeld. Mehrere Varianten |
+| Spielfigur | **64 × 64** | Figur ca. 50–58 px hoch, Füße am unteren Rand. 4 Richtungen × 4–6 Lauf-Frames |
+| Normale Gegner | 64 × 64 | kleine Gegner dürfen das Bild nicht ganz füllen |
+| Miniboss | 128 × 128 | |
+| Endboss | 192 × 192 | |
+| Felsen / Hindernis | 64 × 64 (oder 64 × 80) | |
+| Item-Icon | **64 × 64** | wird im Spiel kleiner angezeigt, Details trotzdem sichtbar |
+| Schuss | 16 × 16 bis 32 × 32 | `shot_player`, `shot_enemy` |
+| Welten-Karte | z. B. 1280 × 720 | darf auch „gemalt“ statt Pixel sein |
 | Menü-Hintergrund | z. B. 1920 × 1080 | |
 
 - **Perspektive:** „Top-Down, leicht schräg (3/4-Ansicht)“, wie in typischen Pixel-Art-RPGs. Figuren schauen in Richtung Kamera.
