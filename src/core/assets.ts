@@ -16,6 +16,8 @@ export interface SpriteDef {
   flip?: boolean;     // bei dirs 1: spiegeln, wenn die Figur nach links schaut
   animIdle?: boolean; // auch im Stand animieren (z. B. Flügelschlag)
   bob?: boolean;      // beim Laufen leicht wippen (für Figuren ohne Laufanimation)
+  layer?: 'back' | 'front'; // Set-Effekte: hinter oder vor der Figur
+  particles?: boolean;      // Set-Effekte: Platzhalter-Partikel zusätzlich behalten
 }
 
 interface Loaded { def: SpriteDef; img: HTMLImageElement; fw: number; fh: number; white?: HTMLCanvasElement }

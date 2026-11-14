@@ -775,7 +775,7 @@ export class Game {
       if (px < 0 || py < 0 || px >= this.room.w || py >= this.room.h || this.room.isSolid(Math.floor(px), Math.floor(py))) break;
       len += 0.1;
     }
-    this.fx.push(new LineFx(x, y, x + ax * len, y + ay * len, 0.12, this.player.tearColor, 0.12));
+    this.fx.push(new LineFx(x, y, x + ax * len, y + ay * len, 0.12, this.player.tearColor, 0.12, 0.62, true));
     this.audio.sfx('shoot');
     for (const e of this.room.enemies as Enemy[]) {
       if (!e.active) continue;

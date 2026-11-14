@@ -8,6 +8,7 @@ import { ball, drawHero, HeroLook, shadow } from './draw';
 import { Assets, drawItemIcon } from '../core/assets';
 import type { Game } from './game';
 import { RunInventory } from './inventory';
+import { drawSetFx, drawWeapon, emitSetParticles } from './playerfx';
 
 export interface ControlState {
   mx: number; my: number;       // Bewegung (-1..1)
@@ -35,6 +36,10 @@ export class Player {
   regenAcc = 0;
   shotSide = 1;
   spriteKeys: string[] = [];
+  fullSets: string[] = [];   // komplette Rüstungs-Sets (3/3) -> sichtbarer Effekt
+  weaponKick = 0;
+  swingT = 0;
+  boomerangOut = false;
 
   constructor(public charMods: Partial<Stats>, public look: HeroLook, public tearColor: string,
     public ability: AbilityId, public inv: RunInventory) {
@@ -48,6 +53,7 @@ export class Player {
     if (full) this.hp = this.stats.maxHp;
     else if (this.stats.maxHp > oldMax) this.hp += this.stats.maxHp - oldMax;
     this.hp = Math.min(this.hp, this.stats.maxHp);
+    this.fullSets = Object.entries(this.inv.setCounts()).filter(([, n]) => n >= 3).map(([id]) => id);
   }
 
   get weapon(): WeaponSpec { return this.inv.weapon?.weapon ?? DEFAULT_WEAPON; }
@@ -90,6 +96,10 @@ export class Player {
       this.attack(g, c.ax, c.ay);
     }
     if (c.ability) this.useAbility(g, c);
+    this.weaponKick = Math.max(0, this.weaponKick - dt * 8);
+    this.swingT = Math.max(0, this.swingT - dt);
+    this.boomerangOut = this.weapon.type === 'boomerang' && g.projectiles.some((p) => p.boomerang && !p.dead);
+    emitSetParticles(g, this, dt);
   }
 
   useAbility(g: Game, c: ControlState) {
@@ -120,6 +130,8 @@ export class Player {
     const dmg = this.baseDamage();
     const base = Math.atan2(ay, ax);
     this.shotSide *= -1;
+    this.weaponKick = 1;
+    if (w.type === 'sword') this.swingT = 0.18;
     const make = (a: number, opts: Partial<Projectile> = {}) => {
       const dx = Math.cos(a), dy = Math.sin(a);
       const p = new Projectile(this.x + dx * 0.25 - dy * 0.08 * this.shotSide, this.y + dy * 0.25, 0.62 + this.z, false);
@@ -159,8 +171,13 @@ export class Player {
         ctx.beginPath(); ctx.ellipse(sx + side * 0.32 * s, sy - 0.45 * s, 0.25 * s, (0.12 + f * 0.5) * s, side * 0.5, 0, Math.PI * 2); ctx.fill();
       }
     }
+    drawSetFx(ctx, cam, this, 'back');
+    const weaponBehind = this.faceY < -0.3;
+    if (weaponBehind) drawWeapon(ctx, cam, this);
     if (!Assets.draw(ctx, Assets.pick(this.spriteKeys), sx, sy, s, { t: performance.now() / 1000, dirX: this.faceX, dirY: this.faceY, moving: this.walk > 0, alpha: blink ? 0.35 : 1 }))
       drawHero(ctx, sx, sy, s, this.look, { faceX: this.faceX, faceY: this.faceY, walk: this.walk, alpha: blink ? 0.35 : 1 });
+    if (!weaponBehind) drawWeapon(ctx, cam, this);
+    drawSetFx(ctx, cam, this, 'front');
     if (this.buffs.shield > 0) {
       ctx.strokeStyle = `rgba(140,200,255,${0.4 + 0.3 * Math.sin(performance.now() / 80)})`;
       ctx.lineWidth = 3;
@@ -265,7 +282,9 @@ export class Projectile {
   }
 
   draw(ctx: CanvasRenderingContext2D, cam: Camera) {
-    const [sx, sy, s] = cam.project(this.x, this.y, this.z);
+    // Spieler-Schüsse: Höhe wie bei aufrechten Figuren (kommt aus der Waffe)
+    let [sx, sy, s] = cam.project(this.x, this.y, this.enemy ? this.z : 0);
+    if (!this.enemy) sy -= this.z * s;
     const rad = Math.max(2, this.r * s);
     if (this.flame) {
       const life = Math.min(1, this.traveled / this.range);
@@ -433,10 +452,11 @@ export class Ring {
 /** Linien-Effekt (Laser, Schwerthieb-Bogen) */
 export class LineFx {
   t = 0; dead = false;
-  constructor(public x1: number, public y1: number, public x2: number, public y2: number, public width: number, public color: string, public dur = 0.15, public z = 0.6) {}
+  constructor(public x1: number, public y1: number, public x2: number, public y2: number, public width: number, public color: string, public dur = 0.15, public z = 0.6, public upright = false) {}
   update(dt: number) { this.t += dt; if (this.t > this.dur) this.dead = true; }
   draw(ctx: CanvasRenderingContext2D, cam: Camera) {
-    const a = cam.project(this.x1, this.y1, this.z), b = cam.project(this.x2, this.y2, this.z);
+    const a = cam.project(this.x1, this.y1, this.upright ? 0 : this.z), b = cam.project(this.x2, this.y2, this.upright ? 0 : this.z);
+    if (this.upright) { a[1] -= this.z * a[2]; b[1] -= this.z * b[2]; }
     ctx.globalAlpha = 1 - this.t / this.dur;
     ctx.strokeStyle = this.color; ctx.lineCap = 'round';
     ctx.lineWidth = Math.max(2, this.width * (a[2] + b[2]) / 2);

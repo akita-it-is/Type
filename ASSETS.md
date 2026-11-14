@@ -67,6 +67,8 @@ dieselbe Pixeldichte haben – also alles in diesem Raster:
 - **Bosse:** `boss_<id>`: `slimeking broodmother necromancer berserker whirler watcher spidermom phantom bombardier stormeye twinslime boneworm guardian flashrunner souleater golem shadowblade plaguebringer deathgaze ancient`
 - **Endbosse:** `boss_motherbrain`, `boss_emperor`, `boss_cyclops`
 - **Boden / Felsen:** `floor_<welt>` / `rock_<welt>` (oder `floor` / `rock` für alle)
+- **Waffen in der Hand:** `weapon_<item-id>` – Waffe zeigt **waagerecht nach rechts**, Griff links-mittig, 64 × 64. `height` = Länge in Kacheln (Standard 0.75). Das Icon fürs Inventar ist `item_<item-id>` (kann dasselbe Bild sein).
+- **Set-Effekte:** `setfx_<set>` – erscheint nur bei vollem Set (3/3). Gleiches Raster wie die Spielfigur (64 × 64, gerne 8 Richtungen), z. B. Heiligenschein, Flügel, Aura. `"layer": "back"` = hinter der Figur, sonst davor; `"particles": true` behält zusätzlich die Platzhalter-Partikel.
 - **Sonstiges:** `coin`, `heart`, `halfheart`, `shot_player`, `shot_enemy`, `card_<welt>`, `menu_bg`
 - **Items:** `item_<id>`
   - Waffen: `wand rustysword scatter boomerang twinwand crossbow runeblade dragonbreath starlaser`
