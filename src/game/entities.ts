@@ -5,6 +5,7 @@ import { norm, rand } from '../core/util';
 import { ABILITIES, AbilityId } from '../data/characters';
 import type { ConsumableItem, WeaponSpec } from '../data/items';
 import { ball, drawHero, HeroLook, shadow } from './draw';
+import { Assets, drawItemIcon } from '../core/assets';
 import type { Game } from './game';
 import { RunInventory } from './inventory';
 
@@ -33,6 +34,7 @@ export class Player {
   flyT = 0;
   regenAcc = 0;
   shotSide = 1;
+  spriteKeys: string[] = [];
 
   constructor(public charMods: Partial<Stats>, public look: HeroLook, public tearColor: string,
     public ability: AbilityId, public inv: RunInventory) {
@@ -157,7 +159,8 @@ export class Player {
         ctx.beginPath(); ctx.ellipse(sx + side * 0.32 * s, sy - 0.45 * s, 0.25 * s, (0.12 + f * 0.5) * s, side * 0.5, 0, Math.PI * 2); ctx.fill();
       }
     }
-    drawHero(ctx, sx, sy, s, this.look, { faceX: this.faceX, faceY: this.faceY, walk: this.walk, alpha: blink ? 0.35 : 1 });
+    if (!Assets.draw(ctx, Assets.pick(this.spriteKeys), sx, sy, s, { t: performance.now() / 1000, dirX: this.faceX, dirY: this.faceY, moving: this.walk > 0, alpha: blink ? 0.35 : 1 }))
+      drawHero(ctx, sx, sy, s, this.look, { faceX: this.faceX, faceY: this.faceY, walk: this.walk, alpha: blink ? 0.35 : 1 });
     if (this.buffs.shield > 0) {
       ctx.strokeStyle = `rgba(140,200,255,${0.4 + 0.3 * Math.sin(performance.now() / 80)})`;
       ctx.lineWidth = 3;
@@ -280,6 +283,7 @@ export class Projectile {
       ctx.restore();
       return;
     }
+    if (Assets.icon(ctx, this.enemy ? 'shot_enemy' : 'shot_player', sx, sy, rad * 2.4)) return;
     ball(ctx, sx, sy, rad, this.color);
     if (this.enemy) {
       ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1.5;
@@ -339,8 +343,10 @@ export class Pickup {
     const [sx, sy, s] = cam.project(this.x, this.y, this.z + 0.18 + hover);
     switch (this.type) {
       case 'heart': case 'halfheart':
+        if (Assets.icon(ctx, this.type, sx, sy, 0.45 * s)) break;
         drawHeartShape(ctx, sx, sy, 0.2 * s, this.type === 'heart' ? 1 : 0.5); break;
       case 'coin': {
+        if (Assets.draw(ctx, 'coin', sx, sy + 0.12 * s, s, { t: this.t, moving: true })) break;
         const w = Math.abs(Math.cos(this.t * 4));
         const big = this.value > 1;
         ctx.fillStyle = big ? '#ffd860' : '#f2c230';
@@ -352,9 +358,7 @@ export class Pickup {
       case 'consumable':
         ctx.fillStyle = 'rgba(255,255,255,0.12)';
         ctx.beginPath(); ctx.arc(sx, sy, 0.26 * s, 0, Math.PI * 2); ctx.fill();
-        ctx.font = `${Math.round(0.36 * s)}px sans-serif`;
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(this.item?.icon || '?', sx, sy);
+        if (this.item) drawItemIcon(ctx, this.item, sx, sy, 0.42 * s);
         break;
     }
   }

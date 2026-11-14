@@ -1,4 +1,5 @@
 import { drawHero } from '../game/draw';
+import { Assets } from '../core/assets';
 import { charById } from '../data/characters';
 import { skinById } from '../data/skins';
 import { saveProfile } from '../core/save';
@@ -19,7 +20,7 @@ export function profilePill(ui: UI, app: App, x: number, y: number) {
   c.save();
   c.beginPath(); c.arc(x + h / 2, y + h / 2, h / 2 - 4 * u, 0, Math.PI * 2);
   c.fillStyle = 'rgba(255,255,255,0.12)'; c.fill(); c.clip();
-  drawHero(c, x + h / 2, y + h * 1.25, h * 0.95, heroLook(app.profile.char, app.profile.skin));
+  drawCharacter(c, x + h / 2, y + h * 1.25, h * 0.95, app.profile.char, app.profile.skin);
   c.restore();
   ui.text(app.profile.name, x + h + 6 * u, y + h / 2, 18);
   if (ui.hit(r)) {
@@ -47,4 +48,13 @@ export function sky(c: CanvasRenderingContext2D, w: number, h: number, top: stri
   const g = c.createLinearGradient(0, 0, 0, h);
   g.addColorStop(0, top); g.addColorStop(1, bottom);
   c.fillStyle = g; c.fillRect(0, 0, w, h);
+}
+
+/** Charakter im Menü zeichnen: eigenes Sprite (char_<id>_<skin> / char_<id>) oder Form-Grafik */
+export function drawCharacter(c: CanvasRenderingContext2D, x: number, y: number, s: number, charId: string, skinId: string, o: { faceX?: number; alpha?: number } = {}) {
+  const key = Assets.pick([`char_${charId}_${skinId}`, `char_${charId}`]);
+  if (Assets.draw(c, key, x, y, s, { dirX: 0, dirY: 1, alpha: o.alpha })) return;
+  c.save(); if (o.alpha !== undefined) c.globalAlpha = o.alpha;
+  drawHero(c, x, y, s, heroLook(charId, skinId), { faceX: o.faceX ?? 0, faceY: 1 });
+  c.restore();
 }

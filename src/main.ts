@@ -3,6 +3,7 @@ import { AudioEngine } from './core/audio';
 import { Input } from './core/input';
 import { loadProfile } from './core/save';
 import { MenuScene } from './ui/menu';
+import { Assets } from './core/assets';
 import { App, Scene } from './ui/ui';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -47,6 +48,7 @@ input.onFirstInteract = () => {
 document.addEventListener('visibilitychange', () => { if (document.hidden) scene?.onHidden?.(); });
 
 scene = new MenuScene(app);
+Assets.load(); // eigene Grafiken laden (falls vorhanden)
 // Für Tests/Debugging in der Browser-Konsole erreichbar
 (window as any).__app = app;
 (window as any).__scene = () => scene;

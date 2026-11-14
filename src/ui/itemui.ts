@@ -4,6 +4,7 @@
 import { ARMOR_SLOT_NAME, ArmorSlot, ItemDef, KIND_NAME, RARITY_INFO, setById } from '../data/items';
 import { SLOTS, type ItemRef } from '../game/inventory';
 import { C, Rect, UI } from './ui';
+import { drawItemIcon } from '../core/assets';
 
 export interface InvView {
   weapon: ItemDef | null;
@@ -31,9 +32,7 @@ export function itemTile(ui: UI, r: Rect, item: ItemDef | null, o: { selected?: 
   c.textAlign = 'center'; c.textBaseline = 'middle';
   if (item) {
     c.globalAlpha = o.dim ? 0.35 : 1;
-    c.font = `${Math.round(r.h * 0.55)}px sans-serif`;
-    c.fillStyle = '#fff';
-    c.fillText(item.icon, r.x + r.w / 2, r.y + r.h / 2 + 1);
+    drawItemIcon(c, item, r.x + r.w / 2, r.y + r.h / 2, r.h * 0.68);
     c.globalAlpha = 1;
   } else if (o.placeholder) {
     c.globalAlpha = 0.25;

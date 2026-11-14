@@ -172,7 +172,7 @@ export class PlayScene implements Scene {
     const lines = arcade
       ? [`Runden: ${res.rounds}  ·  Gegner: ${res.kills}`, `Punkte: ${res.score}${res.newBest ? '  (Neuer Rekord!)' : ''}`, `Münzen: 🪙 ${res.coins}`]
       : res.type === 'dead'
-        ? ['Alle in diesem Run gesammelten Items und Münzen sind verloren.', 'Der Fortschritt dieses Runs zählt nicht.', 'Deine mitgebrachte Ausrüstung ist wieder im Lager.']
+        ? ['Alle Items (auch die mitgebrachte Ausrüstung)', 'und alle Münzen dieses Runs sind verloren.', 'Der Fortschritt dieses Runs zählt nicht.']
         : [`Geschaffte Runden: ${res.rounds}  ·  Gegner: ${res.kills}`, `Ins Lager übernommen: ${res.items} Items`, `Münzen: 🪙 ${res.coins}`];
     lines.forEach((l, i) => ui.text(l, w / 2, r.y + 82 * u + i * 26 * u, 15, { align: 'center', bold: false }));
     const bw = (pw - 60 * u) / 2, by = r.y + ph - 62 * u;

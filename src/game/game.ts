@@ -101,6 +101,7 @@ export class Game {
     const sk = skinById(profile.skin);
     this.inv = RunInventory.fromLoadout(cfg.loadout);
     this.player = new Player(ch.mods, { cloak: sk.cloak || ch.body, skin: sk.skin, hat: ch.hat }, sk.tear, ch.ability, this.inv);
+    this.player.spriteKeys = [`char_${ch.id}_${sk.id}`, `char_${ch.id}`];
     if (cfg.mode === 'world') profile.stats.runs++;
     this.newFloor();
   }
@@ -602,13 +603,12 @@ export class Game {
       prof.stats.bosses += this.bossKills;
       prof.stats.extractions++;
       const wp = worldProgress(prof, this.world.id);
+      // Beim nächsten Mal startet die Welt wieder bei Runde 1
+      wp.best = Math.max(wp.best, this.round);
       if (type === 'worldclear') {
         wp.clears++;
         wp.prestige = Math.min(MAX_PRESTIGE, wp.prestige + 1);
-        wp.round = 1;
         prestige = wp.prestige;
-      } else {
-        wp.round = Math.max(1, Math.min(ROUNDS_PER_WORLD, this.round + 1));
       }
     }
     saveProfile(prof);

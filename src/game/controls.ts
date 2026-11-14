@@ -6,6 +6,7 @@ import type { Profile } from '../core/save';
 import { ABILITIES } from '../data/characters';
 import type { ControlState } from './entities';
 import type { Game } from './game';
+import { Assets } from '../core/assets';
 
 type BtnId = 'ability' | 'item' | 'consumable' | 'cycle' | 'menu';
 const BTN_IDS: BtnId[] = ['menu', 'cycle', 'ability', 'item', 'consumable'];
@@ -125,12 +126,12 @@ export class TouchControls {
     this.drawButton(ctx, 'ability', w, h, ab.icon, '', p.abilityCd <= 0, 1 - p.abilityCd / ab.cooldown);
     // aktives Item (Abklingzeit läuft nur im Kampf)
     const act = inv.active;
-    this.drawButton(ctx, 'item', w, h, act ? act.icon : '', act && inv.activeCd > 0 ? String(Math.ceil(inv.activeCd)) : '', !!act && inv.activeCd <= 0,
+    this.drawButton(ctx, 'item', w, h, act ? (Assets.has('item_' + act.id) ? '#item_' + act.id : act.icon) : '', act && inv.activeCd > 0 ? String(Math.ceil(inv.activeCd)) : '', !!act && inv.activeCd <= 0,
       act ? 1 - inv.activeCd / act.cooldown : 0);
     // Verbrauch (+ Wechsel-Knopf)
     const con = inv.currentConsumable();
     const count = inv.consumables.filter(Boolean).length;
-    this.drawButton(ctx, 'consumable', w, h, con ? con.icon : '', count > 1 ? String(count) : '', !!con, 1, true);
+    this.drawButton(ctx, 'consumable', w, h, con ? (Assets.has('item_' + con.id) ? '#item_' + con.id : con.icon) : '', count > 1 ? String(count) : '', !!con, 1, true);
     if (count > 1) this.drawButton(ctx, 'cycle', w, h, '⟳', '', true, 1);
   }
 
@@ -175,7 +176,8 @@ export class TouchControls {
     ctx.font = `${Math.round(b.r * 0.95)}px sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = '#fff';
-    ctx.fillText(icon, b.x, b.y + 2);
+    if (icon.startsWith('#')) Assets.icon(ctx, icon.slice(1), b.x, b.y, b.r * 1.2);
+    else ctx.fillText(icon, b.x, b.y + 2);
     if (badge) {
       ctx.globalAlpha = 1;
       ctx.font = 'bold 12px sans-serif';

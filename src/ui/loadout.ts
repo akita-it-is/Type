@@ -83,7 +83,7 @@ export class LoadoutScene implements Scene {
 
     if (ui.backButton()) { app.setScene(new WorldSelectScene(app)); return; }
     ui.text(`Ausrüstung – ${this.world.name}`, 72 * u, 24 * u, 20);
-    ui.text(`Runde ${wp.round}/${ROUNDS_PER_WORLD}${wp.prestige ? `  ·  Prestige ★${wp.prestige}` : ''}`, 72 * u, 44 * u, 12, { color: C.dim, bold: false });
+    ui.text(`Start bei Runde 1/${ROUNDS_PER_WORLD}  ·  Rekord ${wp.best}${wp.prestige ? `  ·  Prestige ★${wp.prestige}` : ''}  ·  Achtung: Bei Tod ist die Ausrüstung weg!`, 72 * u, 44 * u, 12, { color: C.dim, bold: false });
     if (ui.button({ x: w - 180 * u, y: 12 * u, w: 164 * u, h: 44 * u }, '▶ Run starten', { primary: true, size: 16 })) { this.start(); return; }
 
     // Links: Slots
@@ -145,7 +145,7 @@ export class LoadoutScene implements Scene {
     prof.pendingLoadout = JSON.parse(JSON.stringify(this.lo));
     saveProfile(prof);
     const wp = worldProgress(prof, this.world.id);
-    this.app.setScene(new PlayScene(this.app, { mode: 'world', world: this.world, round: wp.round, prestige: wp.prestige, loadout: this.lo }));
+    this.app.setScene(new PlayScene(this.app, { mode: 'world', world: this.world, round: 1, prestige: wp.prestige, loadout: this.lo }));
   }
 }
 

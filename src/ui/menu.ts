@@ -1,7 +1,6 @@
 // Hauptmenü nach Skizze: Profil oben links, Münzen oben rechts, Knöpfe links,
 // Charakter auf Podest rechts, Vögel/Wolken im Hintergrund.
-import { drawHero } from '../game/draw';
-import { heroLook, profilePill, sky } from './common';
+import { drawCharacter, profilePill, sky } from './common';
 import { UI, App, Scene, C } from './ui';
 import { WorldSelectScene } from './worldselect';
 import { InventoryScene } from './inventory';
@@ -9,6 +8,7 @@ import { ShopScene } from './shop';
 import { SettingsScene } from './settings';
 import { PlayScene } from './play';
 import { worldById } from '../data/worlds';
+import { Assets } from '../core/assets';
 import { emptyLoadout } from '../core/save';
 
 export class MenuScene implements Scene {
@@ -19,8 +19,10 @@ export class MenuScene implements Scene {
     const { app } = this, { w, h, u } = app;
     const ui = new UI(app, c); ui.begin();
 
-    // Hintergrund
+    // Hintergrund (eigenes Bild "menu_bg" oder Platzhalter)
     sky(c, w, h, '#1a1430', '#3a2a40');
+    const bg = Assets.sprites.get('menu_bg');
+    if (bg) { const f = Math.max(w / bg.fw, h / bg.fh); c.drawImage(bg.img, 0, 0, bg.fw, bg.fh, w / 2 - (bg.fw * f) / 2, h / 2 - (bg.fh * f) / 2, bg.fw * f, bg.fh * f); }
     const groundY = h * 0.7;
     c.fillStyle = '#1a1420'; c.fillRect(0, groundY, w, h - groundY);
     c.strokeStyle = 'rgba(255,240,220,0.5)'; c.lineWidth = 2.5 * u;
@@ -42,9 +44,7 @@ export class MenuScene implements Scene {
     c.fillStyle = 'rgba(0,0,0,0.35)';
     c.beginPath(); c.ellipse(cx, cy - 4 * u, 40 * u, 12 * u, 0, 0, Math.PI * 2); c.fill();
     const t = app.time;
-    drawHero(c, cx, cy - 4 * u + Math.sin(t * 2) * 2 * u, Math.min(h * 0.42, 190 * u), heroLook(app.profile.char, app.profile.skin), {
-      faceX: Math.sin(t * 0.5) * 0.4, faceY: 1,
-    });
+    drawCharacter(c, cx, cy - 4 * u + Math.sin(t * 2) * 2 * u, Math.min(h * 0.42, 190 * u), app.profile.char, app.profile.skin, { faceX: Math.sin(t * 0.5) * 0.4 });
 
     // Titel (provisorisch)
     ui.text('DUNGEON CRAWLER', cx, h * 0.12, 26, { align: 'center', color: C.accent });

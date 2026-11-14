@@ -3,10 +3,12 @@
 // Raumgrößen sind variabel (siehe dungeon.ts); Standardraum = 13 x 7
 export const ROOM_W = 13;
 export const ROOM_H = 7;
-export const WALL_H = 1.3;
+export const WALL_H = 1.1;
 export const NEAR_WALL_H = 0.3;
 
-export const CAMERA = { pitchDeg: 56, height: 11 };
+// Kamera: pitchDeg 90 = genau von oben. height groß = kaum perspektivische Verzerrung
+// (fast "orthografisch" wie bei klassischen Top-Down-Pixelspielen).
+export const CAMERA = { pitchDeg: 66, height: 40 };
 
 // HP: 1 Herz = 20 Lebenspunkte
 export const HP_PER_HEART = 20;
@@ -40,7 +42,7 @@ export const INVULN_TIME = 0.8;
 export const ROUNDS_PER_WORLD = 20;
 export const MAX_PRESTIGE = 10;
 /** true = bei Tod geht auch die mitgebrachte Ausrüstung verloren */
-export const DEATH_LOSES_LOADOUT = false;
+export const DEATH_LOSES_LOADOUT = true;
 
 export const BOMB = { fuse: 1.4, radius: 1.7, damage: 40 };
 

@@ -1,6 +1,7 @@
 // Zeichnet einen Raum in 2.5D: Boden, Wände, Türen, Objekte (nach Tiefe sortiert).
 import { NEAR_WALL_H, WALL_H } from '../core/config';
 import { RARITY_INFO } from '../data/items';
+import { Assets, drawItemIcon } from '../core/assets';
 import { box, poly, shade, shadow } from './draw';
 import { Dir, Pedestal, TILE_ROCK, TILE_SPIKE } from './dungeon';
 import type { Game } from './game';
@@ -12,10 +13,15 @@ export function renderGame(ctx: CanvasRenderingContext2D, g: Game) {
   const room = g.room;
   const W = room.w, H = room.h, DX = room.doorX, DY = room.doorY;
 
-  // ---- Boden ----
+  // ---- Boden (eigene Textur floor_<welt> oder Schachbrett) ----
+  const floorKey = Assets.has(`floor_${g.world.id}`) ? `floor_${g.world.id}` : Assets.has('floor') ? 'floor' : null;
   for (let y = 0; y < H; y++)
-    for (let x = 0; x < W; x++)
-      poly(ctx, cam, [[x, y, 0], [x + 1, y, 0], [x + 1, y + 1, 0], [x, y + 1, 0]], (x + y) % 2 ? th.floorA : th.floorB, 'rgba(0,0,0,0.12)');
+    for (let x = 0; x < W; x++) {
+      if (floorKey) {
+        const a = cam.project(x, y, 0), b = cam.project(x + 1, y + 1, 0);
+        Assets.tile(ctx, floorKey, a[0], a[1], b[0] - a[0], b[1] - a[1], (x * 7 + y * 13) % 5);
+      } else poly(ctx, cam, [[x, y, 0], [x + 1, y, 0], [x + 1, y + 1, 0], [x, y + 1, 0]], (x + y) % 2 ? th.floorA : th.floorB, 'rgba(0,0,0,0.12)');
+    }
   const passage = (d: Dir) => {
     if (!room.doors[d]) return;
     const c = g.doorOpen(d) ? shade(th.floorA, -0.35) : shade(th.floorA, -0.6);
@@ -66,7 +72,11 @@ export function renderGame(ctx: CanvasRenderingContext2D, g: Game) {
   const rc = { top: th.rockTop, front: th.rockFront, side: th.rockSide, outline: 'rgba(0,0,0,0.25)' };
   for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++)
-      if (room.tiles[y][x] === TILE_ROCK) list.push({ y: y + 0.55, f: () => box(ctx, cam, x + 0.06, y + 0.08, x + 0.94, y + 0.92, 0.7, rc) });
+      if (room.tiles[y][x] === TILE_ROCK) list.push({ y: y + 0.55, f: () => {
+        const rk = Assets.pick([`rock_${g.world.id}`, 'rock']);
+        if (rk) { const [sx, sy, s] = cam.project(x + 0.5, y + 0.95, 0); Assets.draw(ctx, rk, sx, sy, s, { t: x + y }); }
+        else box(ctx, cam, x + 0.06, y + 0.08, x + 0.94, y + 0.92, 0.7, rc);
+      } });
   for (const e of enemies) list.push({ y: e.y, f: () => e.draw(ctx, cam, g) });
   if (g.player.hp > 0) list.push({ y: g.player.y, f: () => g.player.draw(ctx, cam) });
   for (const p of g.projectiles) list.push({ y: p.y, f: () => p.draw(ctx, cam) });
@@ -97,9 +107,7 @@ function drawPedestal(ctx: CanvasRenderingContext2D, g: Game, pd: Pedestal) {
   ctx.globalAlpha = 0.35; ctx.fillStyle = rc;
   ctx.beginPath(); ctx.arc(sx, sy, 0.36 * s, 0, Math.PI * 2); ctx.fill();
   ctx.globalAlpha = 1;
-  ctx.font = `${Math.round(0.42 * s)}px sans-serif`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(item.icon, sx, sy);
+  drawItemIcon(ctx, item, sx, sy, 0.5 * s);
   if (pd.price > 0) {
     const [px, py, ps] = cam.project(x, y + 0.45, 0);
     ctx.font = `bold ${Math.round(Math.max(11, 0.26 * ps))}px sans-serif`;

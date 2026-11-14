@@ -4,7 +4,7 @@ import { CHARACTERS } from '../data/characters';
 import { SKINS } from '../data/skins';
 import { saveProfile } from '../core/save';
 import { drawHero } from '../game/draw';
-import { heroLook, Scroller, sky } from './common';
+import { drawCharacter, heroLook, Scroller, sky } from './common';
 import { MenuScene } from './menu';
 import { App, C, Rect, Scene, UI } from './ui';
 
@@ -37,7 +37,7 @@ export class ShopScene implements Scene {
         const r = { x: x0 + i * (tile + gap), y, w: tile, h: tile };
         const has = owned.includes(o.id);
         tileBg(ui, r, false, true);
-        drawHero(c, r.x + r.w / 2, r.y + r.h * 0.78, r.h * 0.6, look(o.id));
+        drawCharacter(c, r.x + r.w / 2, r.y + r.h * 0.78, r.h * 0.6, o.kind === 'char' ? o.id : prof.char, o.kind === 'char' ? 'standard' : o.id);
         c.fillStyle = 'rgba(0,0,0,0.5)'; c.fillRect(r.x + 2, r.y + r.h - 22 * u, r.w - 4, 20 * u);
         ui.text(has ? '✓ Besitzt' : `🪙 ${o.price}`, r.x + r.w / 2, r.y + r.h - 12 * u, 12, { align: 'center', color: has ? C.good : C.accent });
         if (ui.hit(r)) {
@@ -66,8 +66,7 @@ export class ShopScene implements Scene {
     const dw = Math.min(460 * u, w - 40 * u), dh = Math.min(260 * u, h - 40 * u);
     const r = { x: w / 2 - dw / 2, y: h / 2 - dh / 2, w: dw, h: dh };
     ui.panel(r, 22 * u);
-    const look = o.kind === 'char' ? heroLook(o.id, 'standard') : heroLook(prof.char, o.id);
-    drawHero(c, r.x + 80 * u, r.y + dh * 0.72, dh * 0.5, look);
+    drawCharacter(c, r.x + 80 * u, r.y + dh * 0.72, dh * 0.5, o.kind === 'char' ? o.id : prof.char, o.kind === 'char' ? 'standard' : o.id);
     ui.text(o.name, r.x + 160 * u, r.y + 40 * u, 24);
     wrap(ui, o.desc, r.x + 160 * u, r.y + 74 * u, dw - 180 * u, 14);
     const afford = prof.coins >= o.price;

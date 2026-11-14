@@ -5,6 +5,7 @@ import { norm, rand, randPick } from '../core/util';
 import type { EnemyKind, EnemyLook, WorldDef } from '../data/worlds';
 import { ALL_SKILLS, BossDef, SkillId } from '../data/bosses';
 import { ball, shade, shadow } from './draw';
+import { Assets } from '../core/assets';
 import { Hazard, Particle, Projectile } from './entities';
 import type { Game } from './game';
 
@@ -28,6 +29,7 @@ export abstract class Enemy {
   invulnerable = false;
   kbx = 0; kby = 0;
   alpha = 1;
+  spriteKeys: string[] = [];
 
   constructor(public x: number, public y: number, hp: number, public look: EnemyLook, public acc: Acc) {
     this.hp = this.maxHp = hp;
@@ -108,7 +110,12 @@ export abstract class Enemy {
       ctx.beginPath(); ctx.arc(sx, sy, this.r * s * 1.6, 0, Math.PI * 2); ctx.fill();
     }
     ctx.globalAlpha = this.alpha;
-    this.drawBody(ctx, cam, g);
+    const key = Assets.pick(this.spriteKeys);
+    if (key) {
+      const [sx, sy, s] = cam.project(this.x, this.y, this.z);
+      const [fx, fy] = norm(g.player.x - this.x, g.player.y - this.y);
+      Assets.draw(ctx, key, sx, sy, s, { t: this.t, dirX: fx, dirY: fy, moving: true, flash: this.flash > 0, scale: this.r / 0.32 * (this.isBoss ? 0.6 : 1) });
+    } else this.drawBody(ctx, cam, g);
     ctx.globalAlpha = 1;
     if (this.invulnerable) {
       const [sx, sy, s] = cam.project(this.x, this.y, this.z + this.r);
@@ -724,6 +731,7 @@ export class Boss extends Enemy {
     if (this.def.split && !this.half) {
       for (const side of [-1, 1]) {
         const b = new Boss(this.x + side * 0.8, this.y, { ...this.def, size: this.def.size * 0.65 }, this.look, this.acc, this.maxHp * 0.4, this.prestige, false);
+        b.spriteKeys = this.spriteKeys;
         b.half = true; b.state = 'idle'; b.timer = 0.8;
         g.room.enemies.push(b);
       }
@@ -843,6 +851,12 @@ export class Boss extends Enemy {
 }
 
 export function createEnemy(kind: EnemyKind, x: number, y: number, world: WorldDef, hpScale: number): Enemy {
+  const e = makeEnemy(kind, x, y, world, hpScale);
+  e.spriteKeys = [`enemy_${world.id}_${kind}`, `enemy_${kind}`];
+  return e;
+}
+
+function makeEnemy(kind: EnemyKind, x: number, y: number, world: WorldDef, hpScale: number): Enemy {
   const acc = world.accessory;
   switch (kind) {
     case 'flyer': return new Flyer(x, y, 6 * hpScale, world.enemies.flyer, acc);
@@ -856,5 +870,7 @@ export function createEnemy(kind: EnemyKind, x: number, y: number, world: WorldD
 export function createBoss(def: BossDef, x: number, y: number, world: WorldDef, hpScale: number, prestige: number, endboss: boolean): Boss {
   const look: EnemyLook = { name: def.name, color: def.color, accent: world.boss.accent };
   const hp = def.hp * hpScale * (1 + prestige * 0.3);
-  return new Boss(x, y, def, look, world.accessory, hp, prestige, endboss);
+  const b = new Boss(x, y, def, look, world.accessory, hp, prestige, endboss);
+  b.spriteKeys = [`boss_${def.id}`];
+  return b;
 }

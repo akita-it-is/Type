@@ -6,6 +6,7 @@ import { worldProgress } from '../core/save';
 import { profilePill, sky } from './common';
 import { MenuScene } from './menu';
 import { LoadoutScene } from './loadout';
+import { Assets } from '../core/assets';
 import { App, C, Rect, Scene, UI } from './ui';
 
 export function worldUnlocked(app: App, wd: WorldDef) {
@@ -56,7 +57,11 @@ export class WorldSelectScene implements Scene {
     c.fillStyle = g; c.fillRect(r.x, r.y, r.w, r.h);
     const ix = r.x + r.w / 2, iy = r.y + (r.h - labelH) * 0.55, s = Math.min(r.w, r.h - labelH) * 0.4;
     if (!open) c.globalAlpha = 0.35;
-    drawWorldArt(c, wd.id, ix, iy, s, this.app.time);
+    const card = Assets.sprites.get(`card_${wd.id}`);
+    if (card) { // eigenes Bild füllt die Karte
+      const f = Math.max(r.w / card.fw, (r.h - labelH) / card.fh);
+      c.drawImage(card.img, 0, 0, card.fw, card.fh, r.x + r.w / 2 - (card.fw * f) / 2, r.y + (r.h - labelH) / 2 - (card.fh * f) / 2, card.fw * f, card.fh * f);
+    } else drawWorldArt(c, wd.id, ix, iy, s, this.app.time);
     c.globalAlpha = 1;
     c.fillStyle = 'rgba(0,0,0,0.55)'; c.fillRect(r.x, r.y + r.h - labelH, r.w, labelH);
     c.restore();
@@ -73,7 +78,7 @@ export class WorldSelectScene implements Scene {
     if (!open) { c.font = `${Math.round(s * 0.5)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('🔒', ix, iy); }
     const wp = worldProgress(this.app.profile, wd.id);
     ui.text(wd.name, r.x + 12 * u, ly, 17);
-    const prog = `R ${wp.round}/${ROUNDS_PER_WORLD}`;
+    const prog = `Rekord ${wp.best}/${ROUNDS_PER_WORLD}`;
     c.font = `bold ${Math.round(12 * u)}px system-ui, sans-serif`;
     const pw = c.measureText(prog).width + 16 * u, ph = 22 * u;
     const px = r.x + r.w - pw - 10 * u;

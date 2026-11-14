@@ -1,3 +1,5 @@
+import { DEATH_LOSES_LOADOUT } from './config';
+
 // Spielstand (Profil) – wird im Gerät gespeichert (localStorage).
 // Später leicht austauschbar gegen Cloud-Speicher / Capacitor Preferences.
 
@@ -11,7 +13,7 @@ export interface Settings {
 
 export interface WorldProgress {
   prestige: number; // 0..10 – wie oft die Welt komplett geschafft wurde
-  round: number;    // nächste Runde, die gespielt wird (1..20)
+  best: number;     // höchste erreichte Runde (Rekord)
   clears: number;   // wie oft Runde 20 besiegt wurde (insgesamt)
 }
 
@@ -78,10 +80,11 @@ export function loadProfile(): Profile {
     const p = JSON.parse(raw);
     if (p.version !== 2) return def;
     const prof: Profile = { ...def, ...p, settings: { ...def.settings, ...(p.settings || {}) }, stats: { ...def.stats, ...(p.stats || {}) } };
-    // Run wurde abgebrochen (App geschlossen) -> zählt wie Tod, Ausrüstung zurück ins Lager
+    // Run wurde abgebrochen (App geschlossen) -> zählt wie Tod
     if (prof.pendingLoadout) {
-      for (const id of loadoutIds(prof.pendingLoadout)) addToStash(prof, id);
+      if (!DEATH_LOSES_LOADOUT) for (const id of loadoutIds(prof.pendingLoadout)) addToStash(prof, id);
       prof.pendingLoadout = null;
+      prof.stats.deaths++;
       saveProfile(prof);
     }
     return prof;
@@ -95,7 +98,8 @@ export function saveProfile(p: Profile) {
 }
 
 export function worldProgress(p: Profile, id: string): WorldProgress {
-  if (!p.worlds[id]) p.worlds[id] = { prestige: 0, round: 1, clears: 0 };
+  if (!p.worlds[id]) p.worlds[id] = { prestige: 0, best: 0, clears: 0 };
+  p.worlds[id].best ??= 0;
   return p.worlds[id];
 }
 

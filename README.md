@@ -23,8 +23,8 @@ npm run typecheck
 ## Spielkonzept
 - **Welten** mit je **20 Runden**. Jede Runde endet mit einem **Miniboss**, Runde 20 mit dem **Endboss**.
 - Eine geschaffte Welt steigt im **Prestige** auf (max. 10): schwerere Gegner, Bosse mit mehr Leben, mehr Kugeln und zusätzlichen Fähigkeiten. Die nächste Welt wird freigeschaltet.
-- Nach jedem Boss: **nächste Runde** (Falltür) oder **Welt verlassen** (Portal). Beim Verlassen kommen alle Items ins Lager, Münzen werden gutgeschrieben und der Rundenfortschritt gespeichert.
-- **Tod:** Alles, was in diesem Run gesammelt wurde (Items, Münzen, Fortschritt, Statistik), ist verloren. Die mitgebrachte Ausrüstung kommt zurück ins Lager (umschaltbar: `DEATH_LOSES_LOADOUT` in `src/core/config.ts`).
+- Nach jedem Boss: **nächste Runde** (Falltür) oder **Welt verlassen** (Portal). Beim Verlassen kommen alle Items ins Lager und Münzen werden gutgeschrieben. Beim nächsten Mal beginnt die Welt wieder bei Runde 1 (die höchste Runde wird als Rekord gespeichert).
+- **Tod:** Alle Items (auch die mitgebrachte Ausrüstung), Münzen, Fortschritt und Statistik dieses Runs sind verloren (umschaltbar: `DEATH_LOSES_LOADOUT` in `src/core/config.ts`). Ein abgebrochener Run (App geschlossen) zählt wie ein Tod.
 - **Vor jedem Run:** Ausrüstungsmenü (Items aus dem Lager mitnehmen).
 - **Inventar:** 1 Waffe, 3 Rüstungsteile, 1 aktives Item, 5 Verbrauch, 10 Passiv, 5 Rucksack.
 - **Runden-Aufbau:** Start, Boss, Itemraum und Shop garantiert, 2–8 Kampfräume in 4 Größen, optional ein **Altar** (Item opfern → dauerhafter Bonus für den Run).
@@ -65,6 +65,9 @@ src/
     menu.ts, worldselect.ts, loadout.ts (Ausrüstung vor dem Run), inventory.ts (Lager),
     shop.ts, settings.ts, play.ts (Spiel + Inventar/Altar/Ergebnis), itemui.ts
 ```
+
+## Eigene Grafiken
+Siehe **[ASSETS.md](ASSETS.md)**: Bilder nach `public/assets/` legen und in `manifest.json` eintragen – fehlende Bilder werden automatisch durch die Platzhalter-Grafik ersetzt.
 
 ## Provisorisch (wird ersetzt)
 - Grafik: aus Formen gezeichnet, Item-Icons sind Emojis → später Sprites/Modelle
