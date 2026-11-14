@@ -9,6 +9,7 @@ import { ShopScene } from './shop';
 import { SettingsScene } from './settings';
 import { PlayScene } from './play';
 import { worldById } from '../data/worlds';
+import { emptyLoadout } from '../core/save';
 
 export class MenuScene implements Scene {
   birds = Array.from({ length: 6 }, () => ({ x: Math.random(), y: 0.1 + Math.random() * 0.4, s: 0.02 + Math.random() * 0.03, p: Math.random() * 6 }));
@@ -67,6 +68,6 @@ export class MenuScene implements Scene {
     y += gap;
     const best = app.profile.arcadeBest;
     if (ui.button({ x, y, w: bw, h: bh }, best ? `Arcade (${best})` : 'Arcade', { icon: '🕹️' }))
-      app.setScene(new PlayScene(app, { mode: 'arcade', world: worldById('aliens'), stage: 1 }));
+      app.setScene(new PlayScene(app, { mode: 'arcade', world: worldById('aliens'), round: 1, prestige: 0, loadout: emptyLoadout() }));
   }
 }

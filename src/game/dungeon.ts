@@ -1,19 +1,25 @@
-// Ebenen-Generator: Raster aus Räumen, Start in der Mitte, Boss am weitesten entfernt.
-import { ROOM_W, ROOM_H, DOOR_X, DOOR_Y } from '../core/config';
+// Runden-Generator: Startraum, Bossraum, Itemraum und Shop garantiert,
+// 2–8 Kampfräume in verschiedenen Größen, optional ein Spezialraum (Altar).
 import { Rng } from '../core/util';
 import { ROOM_TEMPLATES } from '../data/rooms';
 import type { EnemyKind } from '../data/worlds';
 import type { ItemDef } from '../data/items';
 
-export type RoomType = 'start' | 'normal' | 'item' | 'boss';
+export type RoomType = 'start' | 'normal' | 'item' | 'shop' | 'altar' | 'boss';
 export type Dir = 'up' | 'down' | 'left' | 'right';
 export const DIRS: Record<Dir, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 export const OPPOSITE: Record<Dir, Dir> = { up: 'down', down: 'up', left: 'right', right: 'left' };
 
 export const TILE_FLOOR = 0, TILE_ROCK = 1, TILE_SPIKE = 2;
 
-export interface Spawn { kind: EnemyKind | 'boss'; x: number; y: number }
+/** Raumgrößen (immer ungerade, damit Türen mittig liegen) */
+export const ROOM_SIZES = {
+  small: [9, 5], medium: [13, 7], large: [17, 9], wide: [21, 7],
+} as const;
+
+export interface Spawn { kind: EnemyKind | 'boss'; x: number; y: number; elite?: boolean }
 export interface Decal { x: number; y: number; r: number; color: string; rot: number }
+export interface Pedestal { x: number; y: number; item: ItemDef; price: number; lock: boolean; heart?: boolean }
 
 export class Room {
   tiles: number[][] = [];
@@ -23,18 +29,25 @@ export class Room {
   cleared = false;
   spawned = false;
   spawns: Spawn[] = [];
-  enemies: any[] = [];   // Enemy[] (any, um Zirkel-Importe zu vermeiden)
+  enemies: any[] = [];   // Enemy[]
   pickups: any[] = [];   // Pickup[]
   decals: Decal[] = [];
-  pedestal: ItemDef | null = null;
-  trapdoor = false;
+  pedestals: Pedestal[] = [];
+  altarUsed = false;
+  portals = false;       // nach dem Boss: Falltür + Ausgang
   dist = 0;
+  w = 13; h = 7;
   constructor(public gx: number, public gy: number, public type: RoomType) {}
 
+  get doorX() { return (this.w - 1) / 2; }
+  get doorY() { return (this.h - 1) / 2; }
+
   isSolid(tx: number, ty: number, flying = false): boolean {
-    if (tx < 0 || ty < 0 || tx >= ROOM_W || ty >= ROOM_H) return true;
-    const t = this.tiles[ty][tx];
-    return t === TILE_ROCK && !flying;
+    if (tx < 0 || ty < 0 || tx >= this.w || ty >= this.h) return true;
+    return this.tiles[ty][tx] === TILE_ROCK && !flying;
+  }
+  doorTiles(): [number, number][] {
+    return [[this.doorX, 0], [this.doorX, this.h - 1], [0, this.doorY], [this.w - 1, this.doorY]];
   }
 }
 
@@ -42,146 +55,186 @@ export interface Floor {
   rooms: Room[];
   start: Room;
   boss: Room;
-  get(x: number, y: number): Room | undefined;
 }
 
 export interface FloorOptions {
-  roomCount: number;
-  difficulty: number; // 1.. steigend
+  mobRooms: number;   // 2..8
+  altar: boolean;
+  difficulty: number;
+  eliteChance: number;
   rng: Rng;
-  itemPool: ItemDef[];
 }
 
 export function generateFloor(o: FloorOptions): Floor {
   const { rng } = o;
+  const total = 4 + o.mobRooms + (o.altar ? 1 : 0);
+  const specials = 3 + (o.altar ? 1 : 0); // boss, item, shop, (altar)
   const map = new Map<string, Room>();
   const key = (x: number, y: number) => `${x},${y}`;
   const get = (x: number, y: number) => map.get(key(x, y));
-  const neighbors = (x: number, y: number) =>
-    (Object.values(DIRS) as [number, number][]).filter(([dx, dy]) => get(x + dx, y + dy)).length;
+  const nCount = (x: number, y: number) => (Object.values(DIRS) as [number, number][]).filter(([dx, dy]) => get(x + dx, y + dy)).length;
 
-  let attempts = 0;
-  let start: Room;
-  do {
+  let start!: Room;
+  for (let attempt = 0; attempt < 200; attempt++) {
     map.clear();
-    start = new Room(4, 4, 'start');
-    map.set(key(4, 4), start);
+    start = new Room(5, 5, 'start');
+    map.set(key(5, 5), start);
     const list = [start];
     let guard = 0;
-    while (list.length < o.roomCount && guard++ < 2000) {
+    while (list.length < total && guard++ < 3000) {
       const base = rng.pick(list);
       const [dx, dy] = DIRS[rng.pick(Object.keys(DIRS) as Dir[])];
       const nx = base.gx + dx, ny = base.gy + dy;
-      if (nx < 0 || ny < 0 || nx > 8 || ny > 8 || get(nx, ny)) continue;
-      if (neighbors(nx, ny) > 1) continue;
-      if (list.length > 1 && rng.chance(0.4) && neighbors(base.gx, base.gy) >= 3) continue;
+      if (nx < 0 || ny < 0 || nx > 10 || ny > 10 || get(nx, ny)) continue;
+      if (nCount(nx, ny) > 1) continue;
       const r = new Room(nx, ny, 'normal');
       map.set(key(nx, ny), r);
       list.push(r);
     }
-    attempts++;
-  } while (deadEnds([...map.values()], start, get).length < 2 && attempts < 50);
+    if (list.length === total && deadEnds([...map.values()], start, nCount).length >= Math.min(specials, 3)) break;
+  }
 
   const rooms = [...map.values()];
-  // Türen verbinden
-  for (const r of rooms) {
+  for (const r of rooms)
     for (const d of Object.keys(DIRS) as Dir[]) {
       const [dx, dy] = DIRS[d];
       const n = get(r.gx + dx, r.gy + dy);
       if (n) r.doors[d] = n;
     }
-  }
-  // Abstand per Breitensuche
+  // Abstand vom Start
   const q = [start];
   const seen = new Set([start]);
   while (q.length) {
     const r = q.shift()!;
-    for (const n of Object.values(r.doors)) {
-      if (n && !seen.has(n)) { seen.add(n); n.dist = r.dist + 1; q.push(n); }
-    }
+    for (const n of Object.values(r.doors)) if (n && !seen.has(n)) { seen.add(n); n.dist = r.dist + 1; q.push(n); }
   }
-  const ends = deadEnds(rooms, start, get).sort((a, b) => b.dist - a.dist);
-  const boss = ends[0] || rooms.slice().sort((a, b) => b.dist - a.dist)[0];
+  const ends = deadEnds(rooms, start, nCount).sort((a, b) => b.dist - a.dist);
+  const boss = ends[0];
   boss.type = 'boss';
-  const itemRoom = ends.find((r) => r !== boss);
-  if (itemRoom) itemRoom.type = 'item';
+  const others = rng.shuffle(ends.slice(1));
+  const rest = rng.shuffle(rooms.filter((r) => r !== start && r !== boss && !others.includes(r)));
+  const candidates = [...others, ...rest];
+  const assign = (t: RoomType) => { const r = candidates.shift(); if (r) r.type = t; };
+  assign('item'); assign('shop');
+  if (o.altar) assign('altar');
 
   for (const r of rooms) buildRoom(r, o);
-
-  return { rooms, start, boss, get };
+  return { rooms, start, boss };
 }
 
-function deadEnds(rooms: Room[], start: Room, get: (x: number, y: number) => Room | undefined) {
-  return rooms.filter((r) => r !== start &&
-    (Object.values(DIRS) as [number, number][]).filter(([dx, dy]) => get(r.gx + dx, r.gy + dy)).length === 1);
+function deadEnds(rooms: Room[], start: Room, nCount: (x: number, y: number) => number) {
+  return rooms.filter((r) => r !== start && nCount(r.gx, r.gy) === 1);
 }
-
-const DOOR_TILES: [number, number][] = [[DOOR_X, 0], [DOOR_X, ROOM_H - 1], [0, DOOR_Y], [ROOM_W - 1, DOOR_Y]];
 
 function buildRoom(r: Room, o: FloorOptions) {
   const { rng } = o;
-  const empty = () => Array.from({ length: ROOM_H }, () => new Array(ROOM_W).fill(TILE_FLOOR));
+  const size = r.type === 'normal'
+    ? rng.pick([ROOM_SIZES.small, ROOM_SIZES.medium, ROOM_SIZES.medium, ROOM_SIZES.large, ROOM_SIZES.wide])
+    : r.type === 'boss' ? ROOM_SIZES.large
+      : r.type === 'start' ? ROOM_SIZES.medium
+        : ROOM_SIZES.small;
+  r.w = size[0]; r.h = size[1];
+  const empty = () => Array.from({ length: r.h }, () => new Array(r.w).fill(TILE_FLOOR));
   if (r.type !== 'normal') {
     r.tiles = empty();
     r.cleared = r.type !== 'boss';
-    if (r.type === 'item' && o.itemPool.length) r.pedestal = o.itemPool.splice(rng.int(0, o.itemPool.length - 1), 1)[0];
-    if (r.type === 'boss') r.spawns = [{ kind: 'boss', x: ROOM_W / 2, y: 2.2 }];
+    if (r.type === 'boss') r.spawns = [{ kind: 'boss', x: r.w / 2, y: r.h / 2 }];
     return;
   }
-  // Vorlage wählen, spiegeln, Erreichbarkeit prüfen
-  for (let tries = 0; tries < 20; tries++) {
-    const tpl = rng.pick(ROOM_TEMPLATES);
-    const fx = rng.chance(0.5), fy = rng.chance(0.5);
-    const t = empty();
-    for (let y = 0; y < ROOM_H; y++)
-      for (let x = 0; x < ROOM_W; x++) {
-        const c = tpl[fy ? ROOM_H - 1 - y : y][fx ? ROOM_W - 1 - x : x];
-        t[y][x] = c === '#' ? TILE_ROCK : c === '^' ? TILE_SPIKE : TILE_FLOOR;
-      }
-    for (const [x, y] of DOOR_TILES) t[y][x] = TILE_FLOOR;
-    if (connected(t)) { r.tiles = t; break; }
+  for (let tries = 0; tries < 30; tries++) {
+    const t = r.w === 13 && r.h === 7 && rng.chance(0.6) ? fromTemplate(rng, empty()) : procedural(rng, r.w, r.h, empty());
+    // Türbereiche freihalten
+    for (const [x, y] of r.doorTiles()) {
+      t[y][x] = TILE_FLOOR;
+      if (y === 0) t[1][x] = t[1][x] === TILE_ROCK ? TILE_FLOOR : t[1][x];
+      if (y === r.h - 1) t[r.h - 2][x] = t[r.h - 2][x] === TILE_ROCK ? TILE_FLOOR : t[r.h - 2][x];
+    }
+    r.tiles = t;
+    if (connected(r)) break;
+    r.tiles = empty();
   }
-  if (!r.tiles.length) r.tiles = empty();
 
-  // Gegner
+  // Gegner: mehr in größeren Räumen
   const d = o.difficulty;
   const kinds: [EnemyKind, number][] = [
     ['flyer', 3], ['hopper', 3], ['runner', d >= 2 ? 2 : 0.5], ['shooter', d >= 2 ? 2.5 : 1], ['charger', d >= 3 ? 2 : 0.5],
   ];
-  const total = kinds.reduce((s, k) => s + k[1], 0);
-  const count = Math.min(9, rng.int(2, 4) + Math.floor(d * 0.45));
+  const totalW = kinds.reduce((s, k) => s + k[1], 0);
+  const area = (r.w * r.h) / 91;
+  const count = Math.min(14, Math.round((rng.int(2, 4) + d * 0.35) * Math.sqrt(area)));
   const free: [number, number][] = [];
-  for (let y = 0; y < ROOM_H; y++)
-    for (let x = 0; x < ROOM_W; x++) {
+  for (let y = 0; y < r.h; y++)
+    for (let x = 0; x < r.w; x++) {
       if (r.tiles[y][x] !== TILE_FLOOR) continue;
-      if (DOOR_TILES.some(([dx, dy]) => Math.hypot(dx - x, dy - y) < 3)) continue;
+      if (r.doorTiles().some(([dx, dy]) => Math.hypot(dx - x, dy - y) < 3)) continue;
       free.push([x, y]);
     }
   rng.shuffle(free);
   for (let i = 0; i < count && i < free.length; i++) {
-    let roll = rng() * total;
+    let roll = rng() * totalW;
     let kind: EnemyKind = 'flyer';
     for (const [k, w] of kinds) { if ((roll -= w) <= 0) { kind = k; break; } }
-    r.spawns.push({ kind, x: free[i][0] + 0.5, y: free[i][1] + 0.5 });
+    r.spawns.push({ kind, x: free[i][0] + 0.5, y: free[i][1] + 0.5, elite: rng.chance(o.eliteChance) });
   }
   if (!r.spawns.length) r.cleared = true;
 }
 
-function connected(t: number[][]): boolean {
+function fromTemplate(rng: Rng, t: number[][]) {
+  const tpl = rng.pick(ROOM_TEMPLATES);
+  const fx = rng.chance(0.5), fy = rng.chance(0.5);
+  for (let y = 0; y < 7; y++)
+    for (let x = 0; x < 13; x++) {
+      const c = tpl[fy ? 6 - y : y][fx ? 12 - x : x];
+      t[y][x] = c === '#' ? TILE_ROCK : c === '^' ? TILE_SPIKE : TILE_FLOOR;
+    }
+  return t;
+}
+
+/** Symmetrische Zufallslayouts für alle Raumgrößen */
+function procedural(rng: Rng, w: number, h: number, t: number[][]) {
+  const style = rng.int(0, 3);
+  const set = (x: number, y: number, v: number) => {
+    // vierfach gespiegelt
+    for (const [px, py] of [[x, y], [w - 1 - x, y], [x, h - 1 - y], [w - 1 - x, h - 1 - y]]) t[py][px] = v;
+  };
+  if (style === 0) return t; // leer
+  if (style === 1) { // Säulenraster
+    for (let y = 1; y < h / 2; y += 2) for (let x = 2; x < w / 2; x += 3) set(x, y, TILE_ROCK);
+  } else if (style === 2) { // Zufallsgruppen
+    const n = rng.int(2, 4);
+    for (let i = 0; i < n; i++) {
+      const x = rng.int(1, Math.floor(w / 2) - 1), y = rng.int(1, Math.floor(h / 2));
+      set(x, y, TILE_ROCK);
+      if (rng.chance(0.5)) set(x + 1, y, TILE_ROCK);
+      if (rng.chance(0.4)) set(x, y + 1 < h / 2 ? y + 1 : y, TILE_ROCK);
+    }
+  } else { // Stachelfelder + Felsen
+    const n = rng.int(1, 3);
+    for (let i = 0; i < n; i++) {
+      const x = rng.int(1, Math.floor(w / 2) - 1), y = rng.int(1, Math.floor(h / 2));
+      set(x, y, rng.chance(0.5) ? TILE_SPIKE : TILE_ROCK);
+      set(x + 1, y, TILE_SPIKE);
+    }
+  }
+  return t;
+}
+
+function connected(r: Room): boolean {
   const seen = new Set<number>();
-  const q: [number, number][] = [[DOOR_X, 0]];
-  seen.add(DOOR_X);
+  const [sx, sy] = r.doorTiles()[0];
+  const q: [number, number][] = [[sx, sy]];
+  seen.add(sy * r.w + sx);
   while (q.length) {
     const [x, y] = q.pop()!;
     for (const [dx, dy] of Object.values(DIRS)) {
       const nx = x + dx, ny = y + dy;
-      if (nx < 0 || ny < 0 || nx >= ROOM_W || ny >= ROOM_H) continue;
-      if (t[ny][nx] === TILE_ROCK) continue;
-      const k = ny * ROOM_W + nx;
+      if (nx < 0 || ny < 0 || nx >= r.w || ny >= r.h || r.tiles[ny][nx] === TILE_ROCK) continue;
+      const k = ny * r.w + nx;
       if (seen.has(k)) continue;
-      seen.add(k);
-      q.push([nx, ny]);
+      seen.add(k); q.push([nx, ny]);
     }
   }
-  return DOOR_TILES.every(([x, y]) => seen.has(y * ROOM_W + x));
+  // alle Bodenfelder müssen erreichbar sein (keine eingeschlossenen Gegner)
+  for (let y = 0; y < r.h; y++) for (let x = 0; x < r.w; x++) if (r.tiles[y][x] !== TILE_ROCK && !seen.has(y * r.w + x)) return false;
+  return true;
 }

@@ -16,9 +16,22 @@ npm run typecheck
 ```
 
 **Steuerung**
-- **Handy:** links = Bewegen, rechts = Schießen (Stick). Knöpfe: Item (aktiv), Verbrauch, Bombe. 🎒 oben links = Pause/Inventar.
-- **Tastatur:** WASD = Bewegen, Pfeiltasten = Schießen, Leertaste = Bombe, Q = Item, E = Verbrauch, Esc = Pause.
-- **Gamepad:** linker/rechter Stick, A = Bombe, LB/X = Item, RB/Y = Verbrauch, Start = Pause.
+- **Handy:** links = Bewegen, rechts = Schießen (Stick). Knöpfe: Verbrauch (⟳ = wechseln), aktives Item, Charakter-Fähigkeit. 🎒 oben links = Inventar (pausiert NICHT).
+- **Tastatur:** WASD = Bewegen, Pfeiltasten = Schießen, Leertaste = Fähigkeit, Q = Item, E = Verbrauch, R = Verbrauch wechseln, Tab = Inventar.
+- **Gamepad:** linker/rechter Stick, A = Fähigkeit, X/LB = Item, Y/RB = Verbrauch, B = wechseln, Start = Inventar.
+
+## Spielkonzept
+- **Welten** mit je **20 Runden**. Jede Runde endet mit einem **Miniboss**, Runde 20 mit dem **Endboss**.
+- Eine geschaffte Welt steigt im **Prestige** auf (max. 10): schwerere Gegner, Bosse mit mehr Leben, mehr Kugeln und zusätzlichen Fähigkeiten. Die nächste Welt wird freigeschaltet.
+- Nach jedem Boss: **nächste Runde** (Falltür) oder **Welt verlassen** (Portal). Beim Verlassen kommen alle Items ins Lager, Münzen werden gutgeschrieben und der Rundenfortschritt gespeichert.
+- **Tod:** Alles, was in diesem Run gesammelt wurde (Items, Münzen, Fortschritt, Statistik), ist verloren. Die mitgebrachte Ausrüstung kommt zurück ins Lager (umschaltbar: `DEATH_LOSES_LOADOUT` in `src/core/config.ts`).
+- **Vor jedem Run:** Ausrüstungsmenü (Items aus dem Lager mitnehmen).
+- **Inventar:** 1 Waffe, 3 Rüstungsteile, 1 aktives Item, 5 Verbrauch, 10 Passiv, 5 Rucksack.
+- **Runden-Aufbau:** Start, Boss, Itemraum und Shop garantiert, 2–8 Kampfräume in 4 Größen, optional ein **Altar** (Item opfern → dauerhafter Bonus für den Run).
+- **Münzen:** jedes Monster 1, Elite-Gegner 3–5, Bosse mehr.
+- **Seltenheiten:** gewöhnlich, ungewöhnlich, selten, episch, legendär. **100 gleiche Items** lassen sich im Lager gegen ein Item der nächsten Seltenheit tauschen.
+- **Item-Arten:** Waffen (ändern den Angriff: Kugeln, Schrot, Armbrust, Bumerang, Schwert, Flammen, Laser), Rüstung (Rüstungswert, Werte, Set-Boni), passive Items, aktive Items (Abklingzeit läuft nur in Räumen mit Gegnern), Verbrauchsgegenstände.
+- **20 Bosse** mit verschiedenen Fähigkeiten (Kugelring, Spirale, Nekromant, Wand-zu-Wand-Sprint, Laser, Teleport, Minen, Meteorregen, Sog, Schutzschild, ...), die in allen Welten wiederverwendet werden, plus ein Endboss pro Welt.
 
 ## Projektstruktur
 
@@ -35,28 +48,23 @@ src/
     worlds.ts        Welten (Aliens, Römer, Griechenland, ...) mit Farben, Gegnern, Boss
     characters.ts    Spielbare Charaktere (Shop)
     skins.ts         Skins (Shop)
-    items.ts         Passive Items, aktive Items, Verbrauchsgegenstände
-    rooms.ts         Raum-Layouts
+    items.ts         Waffen, Rüstung + Sets, passive/aktive Items, Verbrauch, Seltenheiten
+    bosses.ts        20 Bosse mit Fähigkeiten
+    rooms.ts         Raum-Layouts (13x7-Vorlagen; andere Größen prozedural)
   game/              Spiel-Logik und Darstellung eines Durchlaufs
-    game.ts          Regeln: Räume, Kollision, Schaden, Belohnungen
-    dungeon.ts       Ebenen-Generator
+    game.ts          Regeln: Runden, Räume, Kollision, Schaden, Shop, Altar, Verlassen/Tod
+    dungeon.ts       Runden-Generator (Raumtypen und -größen)
+    inventory.ts     Inventar eines Runs + Werteberechnung (Rüstung, Sets, Passive)
     entities.ts      Spieler, Schüsse, Bomben, Pickups, Partikel
-    enemies.ts       Gegner-Verhalten + Boss
+    enemies.ts       Gegner-Verhalten + Boss-Fähigkeiten
     render.ts        Raum zeichnen (Boden, Wände, Türen, Tiefensortierung)
     draw.ts          Zeichen-Hilfen + Spielfigur (provisorische Grafik)
     hud.ts           Herzen, Boss-Balken, Minikarte
     controls.ts      Touch-Steuerung (Sticks + Knöpfe)
   ui/                Menüs (Canvas-UI)
-    menu.ts, worldselect.ts, inventory.ts, shop.ts, settings.ts, play.ts
+    menu.ts, worldselect.ts, loadout.ts (Ausrüstung vor dem Run), inventory.ts (Lager),
+    shop.ts, settings.ts, play.ts (Spiel + Inventar/Altar/Ergebnis), itemui.ts
 ```
-
-## Was es schon gibt (v0.1)
-- Hauptmenü, Spielen (Weltenauswahl mit 10 Stufen je Welt), Inventar, Shop, Einstellungen, Arcade (endlos, Rekord)
-- 3 Welten mit eigenem Look, eigenen Gegnernamen, eigenem Boss und eigener Musik
-- 5 Gegnertypen + Boss mit mehreren Angriffsmustern
-- Zufällige Ebenen: Start-, Kampf-, Item- und Bossraum, Türen, Minikarte, Falltür
-- 17 Items (passiv / aktiv / Verbrauch), Bomben, Herzen, Münzen
-- 5 Charaktere und 6 Skins, mit Münzen kaufbar; Spielstand wird gespeichert
 
 ## Provisorisch (wird ersetzt)
 - Grafik: aus Formen gezeichnet, Item-Icons sind Emojis → später Sprites/Modelle

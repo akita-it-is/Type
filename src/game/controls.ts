@@ -1,20 +1,21 @@
-// Touch-Steuerung nach Skizze: links Bewegen-Stick, rechts Schießen-Stick + Knöpfe
-// (Item, Verbrauch, Bombe), oben links Inventar. Dazu Tastatur & Gamepad.
+// Touch-Steuerung: links Bewegen-Stick, rechts Schießen-Stick + Knöpfe
+// (Verbrauch, Item, Charakter-Fähigkeit), oben links Inventar. Dazu Tastatur & Gamepad.
 import { LAYOUT } from '../core/config';
 import type { Input, Ptr } from '../core/input';
 import type { Profile } from '../core/save';
+import { ABILITIES } from '../data/characters';
 import type { ControlState } from './entities';
 import type { Game } from './game';
 
-type BtnId = 'bomb' | 'item' | 'consumable' | 'menu';
+type BtnId = 'ability' | 'item' | 'consumable' | 'cycle' | 'menu';
+const BTN_IDS: BtnId[] = ['menu', 'cycle', 'ability', 'item', 'consumable'];
 
 interface Stick { id: number | null; bx: number; by: number; x: number; y: number }
 
 export class TouchControls {
   move: Stick = { id: null, bx: 0, by: 0, x: 0, y: 0 };
   aim: Stick = { id: null, bx: 0, by: 0, x: 0, y: 0 };
-  held: Record<BtnId, boolean> = { bomb: false, item: false, consumable: false, menu: false };
-  lastAim: [number, number] = [0, 1];
+  held: Record<BtnId, boolean> = { ability: false, item: false, consumable: false, cycle: false, menu: false };
   usingTouch = true;
 
   buttonPos(id: BtnId, w: number, h: number): { x: number; y: number; r: number } {
@@ -26,20 +27,22 @@ export class TouchControls {
 
   reset() {
     this.move.id = this.aim.id = null;
-    this.held = { bomb: false, item: false, consumable: false, menu: false };
+    for (const k of BTN_IDS) this.held[k] = false;
   }
 
-  read(input: Input, w: number, h: number, prof: Profile): ControlState {
-    const st: ControlState = { mx: 0, my: 0, ax: 0, ay: 0, shooting: false, bomb: false, item: false, consumable: false, menu: false };
+  /** blocked = Inventar offen: nur der Inventar-Knopf reagiert, Sticks sind aus */
+  read(input: Input, w: number, h: number, prof: Profile, blocked = false): ControlState {
+    const st: ControlState = { mx: 0, my: 0, ax: 0, ay: 0, shooting: false, ability: false, item: false, consumable: false, cycle: false, menu: false };
 
-    // --- Touch / Maus ---
     for (const p of input.downs) {
       this.usingTouch = true;
-      const hit = (['menu', 'bomb', 'item', 'consumable'] as BtnId[]).find((id) => {
+      const hit = BTN_IDS.find((id) => {
+        if (blocked && id !== 'menu') return false;
         const b = this.buttonPos(id, w, h);
-        return Math.hypot(p.x - b.x, p.y - b.y) < b.r * 1.3;
+        return Math.hypot(p.x - b.x, p.y - b.y) < b.r * (id === 'cycle' ? 1.6 : 1.3);
       });
       if (hit) { p.role = 'btn:' + hit; st[hit] = true; this.held[hit] = true; continue; }
+      if (blocked) continue;
       if (p.x < w / 2 && this.move.id === null) this.startStick(this.move, p, 'move');
       else if (p.x >= w / 2 && this.aim.id === null) this.startStick(this.aim, p, 'aim');
     }
@@ -48,13 +51,13 @@ export class TouchControls {
       if (p.id === this.move.id) this.move.id = null;
       if (p.id === this.aim.id) this.aim.id = null;
     }
+    if (blocked) { this.move.id = this.aim.id = null; }
     const R = LAYOUT.stickRadius;
     const upd = (s: Stick) => {
       const p = s.id !== null ? input.ptrs.get(s.id) : undefined;
       if (!p) { s.id = null; return [0, 0, 0] as const; }
       let dx = p.x - s.bx, dy = p.y - s.by;
       const d = Math.hypot(dx, dy);
-      // Basis wandert mit, wenn der Finger weit rauszieht
       if (d > R * 1.4) { s.bx += (dx / d) * (d - R * 1.4); s.by += (dy / d) * (d - R * 1.4); dx = p.x - s.bx; dy = p.y - s.by; }
       const m = Math.min(1, Math.hypot(dx, dy) / R);
       s.x = dx; s.y = dy;
@@ -66,37 +69,40 @@ export class TouchControls {
     const am = upd(this.aim);
     if (am[2] > LAYOUT.aimThreshold) { st.shooting = true; st.ax = am[0]; st.ay = am[1]; }
 
-    // --- Tastatur ---
-    const k = input.keys;
-    const kx = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
-    const ky = (k.has('KeyS') ? 1 : 0) - (k.has('KeyW') ? 1 : 0);
-    if (kx || ky) { const n = Math.hypot(kx, ky); st.mx = kx / n; st.my = ky / n; this.usingTouch = false; }
-    const sx = (k.has('ArrowRight') ? 1 : 0) - (k.has('ArrowLeft') ? 1 : 0);
-    const sy = (k.has('ArrowDown') ? 1 : 0) - (k.has('ArrowUp') ? 1 : 0);
-    if (sx || sy) { const n = Math.hypot(sx, sy); st.ax = sx / n; st.ay = sy / n; st.shooting = true; }
-    const kp = input.keysPressed;
-    if (kp.has('Space') || kp.has('KeyB')) st.bomb = true;
-    if (kp.has('KeyQ')) st.item = true;
-    if (kp.has('KeyE')) st.consumable = true;
+    // Tastatur
+    const k = input.keys, kp = input.keysPressed;
     if (kp.has('Escape') || kp.has('Tab') || kp.has('KeyI')) st.menu = true;
-
-    // --- Gamepad ---
-    const gp = input.pad;
-    if (gp.connected) {
-      if (Math.hypot(gp.lx, gp.ly) > 0.2) { st.mx = gp.lx; st.my = gp.ly; this.usingTouch = false; }
-      if (Math.hypot(gp.rx, gp.ry) > 0.4) { const n = Math.hypot(gp.rx, gp.ry); st.ax = gp.rx / n; st.ay = gp.ry / n; st.shooting = true; }
-      if (input.padPressed(0) || input.padPressed(1)) st.bomb = true;   // A / B
-      if (input.padPressed(4) || input.padPressed(2)) st.item = true;   // LB / X
-      if (input.padPressed(5) || input.padPressed(3)) st.consumable = true; // RB / Y
-      if (input.padPressed(9) || input.padPressed(8)) st.menu = true;   // Start / Select
+    if (!blocked) {
+      const kx = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
+      const ky = (k.has('KeyS') ? 1 : 0) - (k.has('KeyW') ? 1 : 0);
+      if (kx || ky) { const n = Math.hypot(kx, ky); st.mx = kx / n; st.my = ky / n; this.usingTouch = false; }
+      const sx = (k.has('ArrowRight') ? 1 : 0) - (k.has('ArrowLeft') ? 1 : 0);
+      const sy = (k.has('ArrowDown') ? 1 : 0) - (k.has('ArrowUp') ? 1 : 0);
+      if (sx || sy) { const n = Math.hypot(sx, sy); st.ax = sx / n; st.ay = sy / n; st.shooting = true; }
+      if (kp.has('Space') || kp.has('ShiftLeft')) st.ability = true;
+      if (kp.has('KeyQ')) st.item = true;
+      if (kp.has('KeyE')) st.consumable = true;
+      if (kp.has('KeyR')) st.cycle = true;
     }
 
-    // 4-Richtungen-Modus
+    // Gamepad
+    const gp = input.pad;
+    if (gp.connected) {
+      if (input.padPressed(9) || input.padPressed(8)) st.menu = true;
+      if (!blocked) {
+        if (Math.hypot(gp.lx, gp.ly) > 0.2) { st.mx = gp.lx; st.my = gp.ly; this.usingTouch = false; }
+        if (Math.hypot(gp.rx, gp.ry) > 0.4) { const n = Math.hypot(gp.rx, gp.ry); st.ax = gp.rx / n; st.ay = gp.ry / n; st.shooting = true; }
+        if (input.padPressed(0)) st.ability = true;                       // A
+        if (input.padPressed(2) || input.padPressed(4)) st.item = true;   // X / LB
+        if (input.padPressed(3) || input.padPressed(5)) st.consumable = true; // Y / RB
+        if (input.padPressed(1)) st.cycle = true;                         // B
+      }
+    }
+
     if (st.shooting && prof.settings.aimMode === '4dir') {
       if (Math.abs(st.ax) > Math.abs(st.ay)) { st.ax = Math.sign(st.ax); st.ay = 0; }
       else { st.ay = Math.sign(st.ay); st.ax = 0; }
     }
-    if (st.shooting) this.lastAim = [st.ax, st.ay];
     return st;
   }
 
@@ -108,22 +114,24 @@ export class TouchControls {
   draw(ctx: CanvasRenderingContext2D, g: Game, w: number, h: number) {
     if (!this.usingTouch) return;
     const R = LAYOUT.stickRadius;
-    // Bewegen-Stick
     const [mx, my] = LAYOUT.moveStick(w, h);
     this.drawStick(ctx, this.move.id !== null ? this.move : null, mx, my, R, false);
-    // Schießen-Stick (mit Kreuz wie in der Skizze)
     const [ax, ay] = LAYOUT.aimStick(w, h);
     this.drawStick(ctx, this.aim.id !== null ? this.aim : null, ax, ay, R, true);
 
-    const p = g.player;
-    // Bombe
-    this.drawButton(ctx, 'bomb', w, h, '💣', p.bombs > 0 ? String(p.bombs) : '', p.bombs > 0, 1);
-    // Item (aktiv) mit Ladebalken
-    const act = p.active;
-    this.drawButton(ctx, 'item', w, h, act ? act.icon : '', '', !!act && p.charge >= act.charges, act ? p.charge / act.charges : 0);
-    // Verbrauch
-    const con = p.consumable;
-    this.drawButton(ctx, 'consumable', w, h, con ? con.icon : '', '', !!con, 1, true);
+    const p = g.player, inv = g.inv;
+    // Fähigkeit
+    const ab = ABILITIES[p.ability];
+    this.drawButton(ctx, 'ability', w, h, ab.icon, '', p.abilityCd <= 0, 1 - p.abilityCd / ab.cooldown);
+    // aktives Item (Abklingzeit läuft nur im Kampf)
+    const act = inv.active;
+    this.drawButton(ctx, 'item', w, h, act ? act.icon : '', act && inv.activeCd > 0 ? String(Math.ceil(inv.activeCd)) : '', !!act && inv.activeCd <= 0,
+      act ? 1 - inv.activeCd / act.cooldown : 0);
+    // Verbrauch (+ Wechsel-Knopf)
+    const con = inv.currentConsumable();
+    const count = inv.consumables.filter(Boolean).length;
+    this.drawButton(ctx, 'consumable', w, h, con ? con.icon : '', count > 1 ? String(count) : '', !!con, 1, true);
+    if (count > 1) this.drawButton(ctx, 'cycle', w, h, '⟳', '', true, 1);
   }
 
   private drawStick(ctx: CanvasRenderingContext2D, s: Stick | null, dx: number, dy: number, R: number, cross: boolean) {
@@ -153,17 +161,15 @@ export class TouchControls {
   private drawButton(ctx: CanvasRenderingContext2D, id: BtnId, w: number, h: number, icon: string, badge: string, ready: boolean, fill: number, double = false) {
     const b = this.buttonPos(id, w, h);
     ctx.save();
-    ctx.globalAlpha = this.held[id] ? 0.9 : 0.6;
-    ctx.fillStyle = this.held[id] ? 'rgba(255,255,255,0.3)' : 'rgba(20,16,28,0.45)';
+    ctx.globalAlpha = this.held[id] ? 0.9 : 0.65;
+    ctx.fillStyle = this.held[id] ? 'rgba(255,255,255,0.3)' : 'rgba(20,16,28,0.5)';
     ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
-    ctx.lineWidth = 2.5;
-    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-    ctx.stroke();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.stroke();
     if (double) { ctx.beginPath(); ctx.arc(b.x, b.y, b.r - 5, 0, Math.PI * 2); ctx.stroke(); }
-    if (fill > 0 && fill < 1 || (id === 'item' && fill >= 1)) {
+    if (id !== 'cycle' && id !== 'consumable' && icon) {
       ctx.strokeStyle = fill >= 1 ? '#7affb0' : '#f2c230';
       ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.arc(b.x, b.y, b.r - 1, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, fill)); ctx.stroke();
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r - 1, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0, Math.min(1, fill))); ctx.stroke();
     }
     ctx.globalAlpha = ready ? 1 : 0.4;
     ctx.font = `${Math.round(b.r * 0.95)}px sans-serif`;
@@ -172,7 +178,7 @@ export class TouchControls {
     ctx.fillText(icon, b.x, b.y + 2);
     if (badge) {
       ctx.globalAlpha = 1;
-      ctx.font = 'bold 13px sans-serif';
+      ctx.font = 'bold 12px sans-serif';
       ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(b.x + b.r * 0.72, b.y + b.r * 0.72, 10, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#fff'; ctx.fillText(badge, b.x + b.r * 0.72, b.y + b.r * 0.72 + 1);
     }

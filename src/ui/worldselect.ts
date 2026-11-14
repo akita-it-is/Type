@@ -1,12 +1,22 @@
-// "Spielen": Welten-Karten wie in der Skizze (Aliens, Römer, Griechenland, ...).
-import { WORLDS, WorldDef } from '../data/worlds';
+// "Spielen": Welten-Karten. Jede Welt hat 20 Runden und bis zu 10 Prestige-Stufen.
+// Die nächste Welt wird freigeschaltet, wenn die vorherige einmal geschafft wurde.
+import { WORLDS, WorldDef, playableWorlds } from '../data/worlds';
+import { ROUNDS_PER_WORLD, MAX_PRESTIGE } from '../core/config';
+import { worldProgress } from '../core/save';
 import { profilePill, sky } from './common';
 import { MenuScene } from './menu';
-import { PlayScene } from './play';
+import { LoadoutScene } from './loadout';
 import { App, C, Rect, Scene, UI } from './ui';
 
+export function worldUnlocked(app: App, wd: WorldDef) {
+  if (wd.locked) return false;
+  const list = playableWorlds();
+  const i = list.indexOf(wd);
+  return i <= 0 || worldProgress(app.profile, list[i - 1].id).clears > 0;
+}
+
 export class WorldSelectScene implements Scene {
-  picked: WorldDef | null = null;
+  msg = '';
   constructor(private app: App) {}
 
   frame(c: CanvasRenderingContext2D) {
@@ -14,25 +24,28 @@ export class WorldSelectScene implements Scene {
     const ui = new UI(app, c); ui.begin();
     sky(c, w, h, '#141020', '#221a2c');
 
-    if (this.picked) { this.stagePicker(ui, c); return; }
-
     if (ui.backButton()) { app.setScene(new MenuScene(app)); return; }
     profilePill(ui, app, 70 * u, 12 * u);
     ui.coinPill(w - 16 * u, 12 * u);
 
     const top = 66 * u, pad = 16 * u, gap = 14 * u;
-    const cw = (w - pad * 2 - gap * 2) / 3, ch = (h - top - pad - gap) / 2;
+    const cw = (w - pad * 2 - gap * 2) / 3, ch = (h - top - pad - gap - (this.msg ? 18 * u : 0)) / 2;
     WORLDS.slice(0, 6).forEach((wd, i) => {
       const r: Rect = { x: pad + (i % 3) * (cw + gap), y: top + Math.floor(i / 3) * (ch + gap), w: cw, h: ch };
-      this.card(ui, c, r, wd);
+      const open = worldUnlocked(app, wd);
+      this.card(ui, c, r, wd, open);
       if (ui.hit(r)) {
-        if (wd.locked) app.audio.sfx('error');
-        else { app.audio.sfx('click'); this.picked = wd; }
+        if (!open) {
+          app.audio.sfx('error');
+          const prev = playableWorlds()[playableWorlds().indexOf(wd) - 1];
+          this.msg = wd.locked ? 'Diese Welt kommt bald.' : `Schaffe zuerst alle ${ROUNDS_PER_WORLD} Runden in "${prev?.name}".`;
+        } else { app.audio.sfx('click'); app.setScene(new LoadoutScene(app, wd)); }
       }
     });
+    if (this.msg) ui.text(this.msg, w / 2, h - 12 * u, 12, { align: 'center', color: C.bad, bold: false });
   }
 
-  card(ui: UI, c: CanvasRenderingContext2D, r: Rect, wd: WorldDef) {
+  card(ui: UI, c: CanvasRenderingContext2D, r: Rect, wd: WorldDef, open: boolean) {
     const u = this.app.u;
     const labelH = Math.min(40 * u, r.h * 0.3);
     c.save();
@@ -42,7 +55,9 @@ export class WorldSelectScene implements Scene {
     g.addColorStop(0, wd.card.sky); g.addColorStop(1, wd.card.ground);
     c.fillStyle = g; c.fillRect(r.x, r.y, r.w, r.h);
     const ix = r.x + r.w / 2, iy = r.y + (r.h - labelH) * 0.55, s = Math.min(r.w, r.h - labelH) * 0.4;
+    if (!open) c.globalAlpha = 0.35;
     drawWorldArt(c, wd.id, ix, iy, s, this.app.time);
+    c.globalAlpha = 1;
     c.fillStyle = 'rgba(0,0,0,0.55)'; c.fillRect(r.x, r.y + r.h - labelH, r.w, labelH);
     c.restore();
     ui.rr(r.x, r.y, r.w, r.h, 16 * u);
@@ -55,41 +70,19 @@ export class WorldSelectScene implements Scene {
       c.globalAlpha = 0.6; c.fillText('🔒', ix, iy); c.globalAlpha = 1;
       return;
     }
+    if (!open) { c.font = `${Math.round(s * 0.5)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('🔒', ix, iy); }
+    const wp = worldProgress(this.app.profile, wd.id);
     ui.text(wd.name, r.x + 12 * u, ly, 17);
-    const prog = `${this.app.profile.progress[wd.id] || 0}/${wd.stages}`;
-    c.font = `bold ${Math.round(13 * u)}px system-ui, sans-serif`;
+    const prog = `R ${wp.round}/${ROUNDS_PER_WORLD}`;
+    c.font = `bold ${Math.round(12 * u)}px system-ui, sans-serif`;
     const pw = c.measureText(prog).width + 16 * u, ph = 22 * u;
     const px = r.x + r.w - pw - 10 * u;
     ui.rr(px, ly - ph / 2, pw, ph, ph / 2);
     c.fillStyle = 'rgba(0,0,0,0.4)'; c.fill(); c.lineWidth = 1.5 * u; c.strokeStyle = C.panelLine; c.stroke();
-    ui.text(prog, px + pw / 2, ly, 13, { align: 'center' });
-  }
-
-  stagePicker(ui: UI, c: CanvasRenderingContext2D) {
-    const { app } = this, { w, h, u } = app;
-    const wd = this.picked!;
-    if (ui.backButton()) { this.picked = null; return; }
-    ui.text(wd.name, w / 2, 32 * u, 26, { align: 'center' });
-    ui.text('Wähle eine Stufe', w / 2, 60 * u, 14, { align: 'center', color: C.dim, bold: false });
-    const done = app.profile.progress[wd.id] || 0;
-    const cols = 5, bs = Math.min(84 * u, (w - 80 * u) / cols - 14 * u, (h - 130 * u) / 2 - 14 * u);
-    const gx = 14 * u;
-    const tw = cols * bs + (cols - 1) * gx;
-    for (let i = 0; i < wd.stages; i++) {
-      const r = { x: w / 2 - tw / 2 + (i % cols) * (bs + gx), y: 90 * u + Math.floor(i / cols) * (bs + gx), w: bs, h: bs };
-      const n = i + 1;
-      const unlocked = n <= done + 1;
-      ui.panel(r, 14 * u, n <= done ? 'rgba(60,140,90,0.45)' : 'rgba(24,18,30,0.8)', unlocked ? C.panelLine : 'rgba(255,255,255,0.15)');
-      ui.text(unlocked ? String(n) : '🔒', r.x + r.w / 2, r.y + r.h / 2 - (n === 10 ? 6 * u : 0), unlocked ? 28 : 20, { align: 'center', color: unlocked ? C.text : C.dim });
-      if (n === 10) ui.text('BOSS+', r.x + r.w / 2, r.y + r.h - 14 * u, 11, { align: 'center', color: C.bad });
-      if (n <= done) ui.text('✓', r.x + r.w - 14 * u, r.y + 14 * u, 14, { align: 'center', color: C.good });
-      if (ui.hit(r)) {
-        if (!unlocked) { app.audio.sfx('error'); continue; }
-        app.audio.sfx('click');
-        app.setScene(new PlayScene(app, { mode: 'story', world: wd, stage: n }));
-        return;
-      }
-    }
+    ui.text(prog, px + pw / 2, ly, 12, { align: 'center' });
+    // Prestige-Sterne oben
+    const stars = '★'.repeat(wp.prestige) + '☆'.repeat(MAX_PRESTIGE - wp.prestige);
+    ui.text(stars, r.x + r.w / 2, r.y + 14 * u, 11, { align: 'center', color: wp.prestige ? C.accent : 'rgba(255,255,255,0.35)' });
   }
 }
 

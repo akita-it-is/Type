@@ -53,7 +53,7 @@ export class SettingsScene implements Scene {
       this.confirmReset = false;
     });
 
-    ui.text('Version 0.1 – Prototyp  ·  Tastatur: WASD + Pfeiltasten, Leertaste = Bombe, Q = Item, E = Verbrauch',
+    ui.text('Version 0.1 – Prototyp  ·  Tastatur: WASD + Pfeiltasten, Leertaste = Fähigkeit, Q = Item, E = Verbrauch, R = Wechseln, Tab = Inventar',
       w / 2, h - 16 * u, 11, { align: 'center', color: C.dim, bold: false });
   }
 }

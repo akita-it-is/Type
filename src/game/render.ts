@@ -1,7 +1,8 @@
 // Zeichnet einen Raum in 2.5D: Boden, Wände, Türen, Objekte (nach Tiefe sortiert).
-import { DOOR_X, DOOR_Y, NEAR_WALL_H, ROOM_H, ROOM_W, WALL_H } from '../core/config';
+import { NEAR_WALL_H, WALL_H } from '../core/config';
+import { RARITY_INFO } from '../data/items';
 import { box, poly, shade, shadow } from './draw';
-import { Dir, TILE_ROCK, TILE_SPIKE } from './dungeon';
+import { Dir, Pedestal, TILE_ROCK, TILE_SPIKE } from './dungeon';
 import type { Game } from './game';
 import type { Enemy } from './enemies';
 
@@ -9,26 +10,24 @@ export function renderGame(ctx: CanvasRenderingContext2D, g: Game) {
   const cam = g.camera;
   const th = g.world.theme;
   const room = g.room;
+  const W = room.w, H = room.h, DX = room.doorX, DY = room.doorY;
 
   // ---- Boden ----
-  for (let y = 0; y < ROOM_H; y++)
-    for (let x = 0; x < ROOM_W; x++) {
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++)
       poly(ctx, cam, [[x, y, 0], [x + 1, y, 0], [x + 1, y + 1, 0], [x, y + 1, 0]], (x + y) % 2 ? th.floorA : th.floorB, 'rgba(0,0,0,0.12)');
-    }
-  // Türdurchgänge (Boden außerhalb)
   const passage = (d: Dir) => {
     if (!room.doors[d]) return;
     const c = g.doorOpen(d) ? shade(th.floorA, -0.35) : shade(th.floorA, -0.6);
-    if (d === 'up') poly(ctx, cam, [[DOOR_X, -1, 0], [DOOR_X + 1, -1, 0], [DOOR_X + 1, 0, 0], [DOOR_X, 0, 0]], c);
-    if (d === 'down') poly(ctx, cam, [[DOOR_X, ROOM_H, 0], [DOOR_X + 1, ROOM_H, 0], [DOOR_X + 1, ROOM_H + 1, 0], [DOOR_X, ROOM_H + 1, 0]], c);
-    if (d === 'left') poly(ctx, cam, [[-1, DOOR_Y, 0], [0, DOOR_Y, 0], [0, DOOR_Y + 1, 0], [-1, DOOR_Y + 1, 0]], c);
-    if (d === 'right') poly(ctx, cam, [[ROOM_W, DOOR_Y, 0], [ROOM_W + 1, DOOR_Y, 0], [ROOM_W + 1, DOOR_Y + 1, 0], [ROOM_W, DOOR_Y + 1, 0]], c);
+    if (d === 'up') poly(ctx, cam, [[DX, -1, 0], [DX + 1, -1, 0], [DX + 1, 0, 0], [DX, 0, 0]], c);
+    if (d === 'down') poly(ctx, cam, [[DX, H, 0], [DX + 1, H, 0], [DX + 1, H + 1, 0], [DX, H + 1, 0]], c);
+    if (d === 'left') poly(ctx, cam, [[-1, DY, 0], [0, DY, 0], [0, DY + 1, 0], [-1, DY + 1, 0]], c);
+    if (d === 'right') poly(ctx, cam, [[W, DY, 0], [W + 1, DY, 0], [W + 1, DY + 1, 0], [W, DY + 1, 0]], c);
   };
   (['up', 'down', 'left', 'right'] as Dir[]).forEach(passage);
 
-  // Stacheln
-  for (let y = 0; y < ROOM_H; y++)
-    for (let x = 0; x < ROOM_W; x++) {
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
       if (room.tiles[y][x] !== TILE_SPIKE) continue;
       poly(ctx, cam, [[x + 0.05, y + 0.05, 0], [x + 0.95, y + 0.05, 0], [x + 0.95, y + 0.95, 0], [x + 0.05, y + 0.95, 0]], 'rgba(0,0,0,0.3)');
       for (let i = 0; i < 3; i++)
@@ -38,19 +37,18 @@ export function renderGame(ctx: CanvasRenderingContext2D, g: Game) {
         }
     }
 
-  // Flecken
   for (const d of room.decals) {
     const [sx, sy, s] = cam.project(d.x, d.y, 0);
     ctx.fillStyle = d.color;
     ctx.beginPath(); ctx.ellipse(sx, sy, d.r * s, d.r * s * cam.sp * 0.9, d.rot * 0.2, 0, Math.PI * 2); ctx.fill();
   }
 
-  // Falltür
-  if (room.trapdoor) {
-    const x = ROOM_W / 2, y = ROOM_H / 2;
-    poly(ctx, cam, [[x - 0.55, y - 0.45, 0], [x + 0.55, y - 0.45, 0], [x + 0.55, y + 0.45, 0], [x - 0.55, y + 0.45, 0]], '#050307', '#2a2020');
-    poly(ctx, cam, [[x - 0.55, y - 0.45, 0], [x + 0.55, y - 0.45, 0], [x + 0.55, y - 0.45, -0.4], [x - 0.55, y - 0.45, -0.4]], '#1a1418');
-  }
+  // Altar (Spezialraum)
+  if (room.type === 'altar') drawAltar(ctx, g);
+  // Portale nach dem Boss
+  if (room.portals) drawPortals(ctx, g);
+  // Gefahrenzonen am Boden
+  for (const h of g.hazards) h.draw(ctx, cam);
 
   drawWalls(ctx, g);
 
@@ -58,16 +56,16 @@ export function renderGame(ctx: CanvasRenderingContext2D, g: Game) {
   const enemies = room.enemies as Enemy[];
   for (const e of enemies) e.drawShadow(ctx, cam);
   if (g.player.hp > 0) g.player.drawShadow(ctx, cam);
-  for (const p of g.projectiles) if (p.z > 0.05) shadow(ctx, cam, p.x, p.y, p.r * 0.9, 0.25);
+  for (const p of g.projectiles) if (p.z > 0.05 && !p.flame) shadow(ctx, cam, p.x, p.y, p.r * 0.9, 0.25);
   for (const b of g.bombs) shadow(ctx, cam, b.x, b.y, 0.22);
   for (const pk of room.pickups) shadow(ctx, cam, pk.x, pk.y, 0.15, 0.25);
 
-  // ---- Objekte nach Tiefe sortieren ----
+  // ---- Objekte nach Tiefe sortiert ----
   type D = { y: number; f: () => void };
   const list: D[] = [];
   const rc = { top: th.rockTop, front: th.rockFront, side: th.rockSide, outline: 'rgba(0,0,0,0.25)' };
-  for (let y = 0; y < ROOM_H; y++)
-    for (let x = 0; x < ROOM_W; x++)
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++)
       if (room.tiles[y][x] === TILE_ROCK) list.push({ y: y + 0.55, f: () => box(ctx, cam, x + 0.06, y + 0.08, x + 0.94, y + 0.92, 0.7, rc) });
   for (const e of enemies) list.push({ y: e.y, f: () => e.draw(ctx, cam, g) });
   if (g.player.hp > 0) list.push({ y: g.player.y, f: () => g.player.draw(ctx, cam) });
@@ -75,78 +73,118 @@ export function renderGame(ctx: CanvasRenderingContext2D, g: Game) {
   for (const b of g.bombs) list.push({ y: b.y, f: () => b.draw(ctx, cam) });
   for (const pk of room.pickups) list.push({ y: pk.y, f: () => pk.draw(ctx, cam) });
   for (const pt of g.particles) list.push({ y: pt.y, f: () => pt.draw(ctx, cam) });
-  if (room.pedestal) {
-    const px = ROOM_W / 2, py = ROOM_H / 2 - (room.trapdoor ? 1.6 : 0);
-    list.push({ y: py + 0.3, f: () => drawPedestal(ctx, g, px, py) });
-  }
+  for (const pd of room.pedestals) list.push({ y: pd.y + 0.3, f: () => drawPedestal(ctx, g, pd) });
   list.sort((a, b) => a.y - b.y);
   for (const d of list) d.f();
 
-  for (const r of g.rings) r.draw(ctx, cam);
-
+  for (const f of g.fx) f.draw(ctx, cam);
   drawNearWall(ctx, g);
-
   for (const t of g.texts) t.draw(ctx, cam);
 
-  // Zeitlupe-Effekt
   if (g.slowTime > 0) {
     ctx.fillStyle = 'rgba(120,160,255,0.08)';
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   }
 }
 
-function drawPedestal(ctx: CanvasRenderingContext2D, g: Game, x: number, y: number) {
+function drawPedestal(ctx: CanvasRenderingContext2D, g: Game, pd: Pedestal) {
   const cam = g.camera;
-  const item = g.room.pedestal!;
-  box(ctx, cam, x - 0.35, y - 0.3, x + 0.35, y + 0.3, 0.45, { top: '#9a8a7a', front: '#6a5a4a', side: '#5a4a3a', outline: 'rgba(0,0,0,0.3)' });
-  const bob = Math.sin(g.time * 3) * 0.08;
-  const [sx, sy, s] = cam.project(x, y, 0.95 + bob);
-  const grd = ctx.createRadialGradient(sx, sy, 0, sx, sy, 0.5 * s);
-  grd.addColorStop(0, item.color + '');
-  grd.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.globalAlpha = 0.35; ctx.fillStyle = grd;
-  ctx.beginPath(); ctx.arc(sx, sy, 0.5 * s, 0, Math.PI * 2); ctx.fill();
+  const { x, y, item } = pd;
+  const rc = RARITY_INFO[item.rarity].color;
+  box(ctx, cam, x - 0.32, y - 0.27, x + 0.32, y + 0.27, 0.4, { top: '#9a8a7a', front: '#6a5a4a', side: '#5a4a3a', outline: rc });
+  const bob = Math.sin(g.time * 3 + x) * 0.08;
+  const [sx, sy, s] = cam.project(x, y, 0.9 + bob);
+  ctx.globalAlpha = 0.35; ctx.fillStyle = rc;
+  ctx.beginPath(); ctx.arc(sx, sy, 0.36 * s, 0, Math.PI * 2); ctx.fill();
   ctx.globalAlpha = 1;
-  ctx.font = `${Math.round(0.45 * s)}px sans-serif`;
+  ctx.font = `${Math.round(0.42 * s)}px sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(item.icon, sx, sy);
+  if (pd.price > 0) {
+    const [px, py, ps] = cam.project(x, y + 0.45, 0);
+    ctx.font = `bold ${Math.round(Math.max(11, 0.26 * ps))}px sans-serif`;
+    const t = `🪙${pd.price}`;
+    ctx.lineWidth = 3; ctx.strokeStyle = '#000'; ctx.strokeText(t, px, py);
+    ctx.fillStyle = g.runCoins >= pd.price ? '#ffe066' : '#ff7070'; ctx.fillText(t, px, py);
+  }
 }
 
-function doorColors(g: Game, d: Dir) {
+function drawAltar(ctx: CanvasRenderingContext2D, g: Game) {
+  const cam = g.camera, r = g.room;
+  const x = r.w / 2, y = r.h / 2;
+  const used = r.altarUsed;
+  box(ctx, cam, x - 0.6, y - 0.4, x + 0.6, y + 0.4, 0.45, { top: used ? '#4a4050' : '#7a5a9a', front: '#4a3a5a', side: '#3a2a4a', outline: 'rgba(0,0,0,0.4)' });
+  if (!used) {
+    const [sx, sy, s] = cam.project(x, y, 0.9 + Math.sin(g.time * 2) * 0.1);
+    ctx.fillStyle = `rgba(200,120,255,${0.35 + 0.15 * Math.sin(g.time * 4)})`;
+    ctx.beginPath(); ctx.arc(sx, sy, 0.35 * s, 0, Math.PI * 2); ctx.fill();
+    ctx.font = `${Math.round(0.4 * s)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('🔮', sx, sy);
+  }
+}
+
+function drawPortals(ctx: CanvasRenderingContext2D, g: Game) {
+  const cam = g.camera;
+  const pulse = 0.5 + 0.5 * Math.sin(g.time * 4);
+  const hole = (x: number, y: number) => {
+    poly(ctx, cam, [[x - 0.5, y - 0.4, 0], [x + 0.5, y - 0.4, 0], [x + 0.5, y + 0.4, 0], [x - 0.5, y + 0.4, 0]], '#050307', '#3a2a20');
+    const [sx, sy, s] = cam.project(x, y + 0.6, 0);
+    label(ctx, sx, sy, s, 'Nächste Runde', '#ffe066');
+  };
+  const exit = (x: number, y: number, text: string) => {
+    const [sx, sy, s] = cam.project(x, y, 0);
+    ctx.fillStyle = `rgba(120,220,255,${0.25 + pulse * 0.2})`;
+    ctx.beginPath(); ctx.ellipse(sx, sy, 0.55 * s, 0.55 * s * cam.sp, 0, 0, Math.PI * 2); ctx.fill();
+    const [tx, ty] = cam.project(x, y, 1.6);
+    const grd = ctx.createLinearGradient(0, ty, 0, sy);
+    grd.addColorStop(0, 'rgba(150,230,255,0)'); grd.addColorStop(1, `rgba(150,230,255,${0.5 + pulse * 0.2})`);
+    ctx.fillStyle = grd; ctx.fillRect(sx - 0.4 * s, ty, 0.8 * s, sy - ty);
+    label(ctx, sx, sy + 0.5 * s * cam.sp + 6, s, text, '#9ae8ff');
+  };
+  if (g.cfg.mode === 'arcade') { const [x, y] = g.nextPortalPos(); hole(x, y); return; }
+  if (!g.isFinalRound) { const [x, y] = g.nextPortalPos(); hole(x, y); }
+  const [ex, ey] = g.exitPortalPos();
+  exit(ex, ey, g.isFinalRound ? 'Welt abschließen' : 'Welt verlassen');
+}
+
+function label(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, t: string, color: string) {
+  ctx.font = `bold ${Math.round(Math.max(11, 0.24 * s))}px sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.lineWidth = 3; ctx.strokeStyle = '#000'; ctx.strokeText(t, x, y);
+  ctx.fillStyle = color; ctx.fillText(t, x, y);
+  ctx.textBaseline = 'middle';
+}
+
+function doorColor(g: Game, d: Dir) {
   const n = g.room.doors[d]!;
-  const special = n.type === 'boss' || g.room.type === 'boss' ? '#8a1a1a' : n.type === 'item' || g.room.type === 'item' ? '#c8a030' : null;
-  return special;
+  const t = n.type === 'start' || n.type === 'normal' ? g.room.type : n.type;
+  return t === 'boss' ? '#8a1a1a' : t === 'item' ? '#c8a030' : t === 'shop' ? '#3a9a5a' : t === 'altar' ? '#8a4ac0' : null;
 }
 
 function drawWalls(ctx: CanvasRenderingContext2D, g: Game) {
   const cam = g.camera, th = g.world.theme, room = g.room;
+  const W = room.w, Hh = room.h, DX = room.doorX, DY = room.doorY;
   const H = WALL_H;
   const faceDark = shade(th.wallFace, -0.15);
-  // Hintere Wand
-  poly(ctx, cam, [[0, 0, 0], [ROOM_W, 0, 0], [ROOM_W, 0, H], [0, 0, H]], th.wallFace);
-  // Fugen in der Wand
+  poly(ctx, cam, [[0, 0, 0], [W, 0, 0], [W, 0, H], [0, 0, H]], th.wallFace);
   ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1;
   for (let i = 1; i < 3; i++) {
-    const a = cam.project(0, 0, (H / 3) * i), b = cam.project(ROOM_W, 0, (H / 3) * i);
+    const a = cam.project(0, 0, (H / 3) * i), b = cam.project(W, 0, (H / 3) * i);
     ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
   }
-  // Seitenwände (Innenseiten)
-  poly(ctx, cam, [[0, 0, 0], [0, ROOM_H, 0], [0, ROOM_H, H], [0, 0, H]], faceDark);
-  poly(ctx, cam, [[ROOM_W, 0, 0], [ROOM_W, ROOM_H, 0], [ROOM_W, ROOM_H, H], [ROOM_W, 0, H]], faceDark);
-  // Wandoberseiten
-  poly(ctx, cam, [[-1, -1, H], [ROOM_W + 1, -1, H], [ROOM_W, 0, H], [0, 0, H]], th.wallTop);
-  poly(ctx, cam, [[-1, -1, H], [0, 0, H], [0, ROOM_H, H], [-1, ROOM_H + 1, H]], shade(th.wallTop, -0.08));
-  poly(ctx, cam, [[ROOM_W + 1, -1, H], [ROOM_W + 1, ROOM_H + 1, H], [ROOM_W, ROOM_H, H], [ROOM_W, 0, H]], shade(th.wallTop, -0.08));
+  poly(ctx, cam, [[0, 0, 0], [0, Hh, 0], [0, Hh, H], [0, 0, H]], faceDark);
+  poly(ctx, cam, [[W, 0, 0], [W, Hh, 0], [W, Hh, H], [W, 0, H]], faceDark);
+  poly(ctx, cam, [[-1, -1, H], [W + 1, -1, H], [W, 0, H], [0, 0, H]], th.wallTop);
+  poly(ctx, cam, [[-1, -1, H], [0, 0, H], [0, Hh, H], [-1, Hh + 1, H]], shade(th.wallTop, -0.08));
+  poly(ctx, cam, [[W + 1, -1, H], [W + 1, Hh + 1, H], [W, Hh, H], [W, 0, H]], shade(th.wallTop, -0.08));
 
-  // Türen in hinteren/seitlichen Wänden
   const dh = 0.95;
   const door = (d: Dir, pts: [number, number, number][], frame: [number, number, number][]) => {
     if (!room.doors[d]) return;
-    const sp = doorColors(g, d);
+    const sp = doorColor(g, d);
     poly(ctx, cam, frame, sp || shade(th.wallFace, -0.4));
     poly(ctx, cam, pts, '#07050a');
     if (!g.doorOpen(d)) {
-      // Gitter
       ctx.strokeStyle = sp || shade(th.wallTop, -0.2);
       ctx.lineWidth = 3;
       for (let i = 1; i <= 3; i++) {
@@ -157,36 +195,34 @@ function drawWalls(ctx: CanvasRenderingContext2D, g: Game) {
       }
     }
   };
-  door('up', [[DOOR_X, 0, 0], [DOOR_X + 1, 0, 0], [DOOR_X + 1, 0, dh], [DOOR_X, 0, dh]],
-    [[DOOR_X - 0.15, 0, 0], [DOOR_X + 1.15, 0, 0], [DOOR_X + 1.15, 0, dh + 0.15], [DOOR_X - 0.15, 0, dh + 0.15]]);
-  door('left', [[0, DOOR_Y + 1, 0], [0, DOOR_Y, 0], [0, DOOR_Y, dh], [0, DOOR_Y + 1, dh]],
-    [[0, DOOR_Y + 1.15, 0], [0, DOOR_Y - 0.15, 0], [0, DOOR_Y - 0.15, dh + 0.15], [0, DOOR_Y + 1.15, dh + 0.15]]);
-  door('right', [[ROOM_W, DOOR_Y + 1, 0], [ROOM_W, DOOR_Y, 0], [ROOM_W, DOOR_Y, dh], [ROOM_W, DOOR_Y + 1, dh]],
-    [[ROOM_W, DOOR_Y + 1.15, 0], [ROOM_W, DOOR_Y - 0.15, 0], [ROOM_W, DOOR_Y - 0.15, dh + 0.15], [ROOM_W, DOOR_Y + 1.15, dh + 0.15]]);
+  door('up', [[DX, 0, 0], [DX + 1, 0, 0], [DX + 1, 0, dh], [DX, 0, dh]],
+    [[DX - 0.15, 0, 0], [DX + 1.15, 0, 0], [DX + 1.15, 0, dh + 0.15], [DX - 0.15, 0, dh + 0.15]]);
+  door('left', [[0, DY + 1, 0], [0, DY, 0], [0, DY, dh], [0, DY + 1, dh]],
+    [[0, DY + 1.15, 0], [0, DY - 0.15, 0], [0, DY - 0.15, dh + 0.15], [0, DY + 1.15, dh + 0.15]]);
+  door('right', [[W, DY + 1, 0], [W, DY, 0], [W, DY, dh], [W, DY + 1, dh]],
+    [[W, DY + 1.15, 0], [W, DY - 0.15, 0], [W, DY - 0.15, dh + 0.15], [W, DY + 1.15, dh + 0.15]]);
 }
 
 function drawNearWall(ctx: CanvasRenderingContext2D, g: Game) {
-  const cam = g.camera, th = g.world.theme;
+  const cam = g.camera, th = g.world.theme, room = g.room;
+  const W = room.w, H = room.h, DX = room.doorX;
   const h = NEAR_WALL_H;
-  const hasDoor = !!g.room.doors.down;
+  const hasDoor = !!room.doors.down;
   const seg = (x0: number, x1: number) => {
-    poly(ctx, cam, [[x0, ROOM_H, h], [x1, ROOM_H, h], [x1, ROOM_H + 1, h], [x0, ROOM_H + 1, h]], th.wallTop);
-    poly(ctx, cam, [[x0, ROOM_H + 1, 0], [x1, ROOM_H + 1, 0], [x1, ROOM_H + 1, h], [x0, ROOM_H + 1, h]], shade(th.wallFace, -0.3));
+    poly(ctx, cam, [[x0, H, h], [x1, H, h], [x1, H + 1, h], [x0, H + 1, h]], th.wallTop);
+    poly(ctx, cam, [[x0, H + 1, 0], [x1, H + 1, 0], [x1, H + 1, h], [x0, H + 1, h]], shade(th.wallFace, -0.3));
   };
-  if (hasDoor) { seg(-1, DOOR_X); seg(DOOR_X + 1, ROOM_W + 1); }
-  else seg(-1, ROOM_W + 1);
-  // Innenkante
-  poly(ctx, cam, [[0, ROOM_H, 0], [ROOM_W, ROOM_H, 0], [ROOM_W, ROOM_H, h], [0, ROOM_H, h]], 'rgba(0,0,0,0)');
+  if (hasDoor) { seg(-1, DX); seg(DX + 1, W + 1); } else seg(-1, W + 1);
   if (hasDoor) {
-    const sp = doorColors(g, 'down');
+    const sp = doorColor(g, 'down');
     if (sp) {
-      poly(ctx, cam, [[DOOR_X - 0.15, ROOM_H, h], [DOOR_X, ROOM_H, h], [DOOR_X, ROOM_H + 1, h], [DOOR_X - 0.15, ROOM_H + 1, h]], sp);
-      poly(ctx, cam, [[DOOR_X + 1, ROOM_H, h], [DOOR_X + 1.15, ROOM_H, h], [DOOR_X + 1.15, ROOM_H + 1, h], [DOOR_X + 1, ROOM_H + 1, h]], sp);
+      poly(ctx, cam, [[DX - 0.15, H, h], [DX, H, h], [DX, H + 1, h], [DX - 0.15, H + 1, h]], sp);
+      poly(ctx, cam, [[DX + 1, H, h], [DX + 1.15, H, h], [DX + 1.15, H + 1, h], [DX + 1, H + 1, h]], sp);
     }
     if (!g.doorOpen('down')) {
       ctx.strokeStyle = sp || shade(th.wallTop, -0.2); ctx.lineWidth = 3;
       for (let i = 1; i <= 3; i++) {
-        const a = cam.project(DOOR_X + i / 4, ROOM_H + 0.1, 0), b = cam.project(DOOR_X + i / 4, ROOM_H + 0.1, 0.6);
+        const a = cam.project(DX + i / 4, H + 0.1, 0), b = cam.project(DX + i / 4, H + 0.1, 0.6);
         ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
       }
     }

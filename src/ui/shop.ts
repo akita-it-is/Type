@@ -5,7 +5,6 @@ import { SKINS } from '../data/skins';
 import { saveProfile } from '../core/save';
 import { drawHero } from '../game/draw';
 import { heroLook, Scroller, sky } from './common';
-import { tileBg } from './inventory';
 import { MenuScene } from './menu';
 import { App, C, Rect, Scene, UI } from './ui';
 
@@ -99,4 +98,14 @@ export function wrap(ui: UI, text: string, x: number, y: number, maxW: number, s
     else line = test;
   }
   if (line) ui.text(line, x, y, size, { bold: false, color: C.dim });
+}
+
+function tileBg(ui: UI, r: Rect, selected: boolean, enabled: boolean) {
+  const u = ui.app.u;
+  ui.rr(r.x, r.y, r.w, r.h, 14 * u);
+  ui.ctx.fillStyle = selected ? 'rgba(242,194,48,0.22)' : enabled ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.3)';
+  ui.ctx.fill();
+  ui.ctx.lineWidth = (selected ? 3.5 : 2) * u;
+  ui.ctx.strokeStyle = selected ? C.accent : enabled ? C.panelLine : 'rgba(255,255,255,0.2)';
+  ui.ctx.stroke();
 }

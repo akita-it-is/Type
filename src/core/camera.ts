@@ -4,17 +4,28 @@ import { CAMERA, ROOM_W, ROOM_H, WALL_H } from './config';
 // wird auf den Bildschirm projiziert -> 2.5D-Ansicht.
 export class Camera {
   sp: number; cp: number;
-  cx: number; cy: number; cz: number;
+  cx = 0; cy = 0; cz = 0;
   k = 1; ox = 0; oy = 0;
   shake = 0; sx = 0; sy = 0;
+  rw = ROOM_W; rh = ROOM_H;
+  private vw = 0; private vh = 0; private margins = [0, 0, 0];
 
   constructor() {
     const p = (CAMERA.pitchDeg * Math.PI) / 180;
     this.sp = Math.sin(p);
     this.cp = Math.cos(p);
-    this.cx = ROOM_W / 2;
-    this.cz = CAMERA.height;
-    this.cy = ROOM_H / 2 + CAMERA.height / Math.tan(p);
+    this.setRoom(ROOM_W, ROOM_H);
+  }
+
+  /** Kamera auf einen Raum der Größe w x h ausrichten */
+  setRoom(w: number, h: number) {
+    this.rw = w; this.rh = h;
+    const scale = Math.max(w / ROOM_W, h / ROOM_H);
+    const height = CAMERA.height * scale;
+    this.cx = w / 2;
+    this.cz = height;
+    this.cy = h / 2 + height / Math.tan(Math.asin(this.sp));
+    if (this.vw) this.fit(this.vw, this.vh, this.margins[0], this.margins[1], this.margins[2]);
   }
 
   raw(x: number, y: number, z: number): [number, number, number] {
@@ -31,9 +42,10 @@ export class Camera {
   }
 
   fit(w: number, h: number, top: number, bottom: number, side: number) {
+    this.vw = w; this.vh = h; this.margins = [top, bottom, side];
     const pts: [number, number, number][] = [
-      [-1, -1, WALL_H], [ROOM_W + 1, -1, WALL_H],
-      [-1, ROOM_H + 1, 0], [ROOM_W + 1, ROOM_H + 1, 0],
+      [-1, -1, WALL_H], [this.rw + 1, -1, WALL_H],
+      [-1, this.rh + 1, 0], [this.rw + 1, this.rh + 1, 0],
     ];
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const p of pts) {
